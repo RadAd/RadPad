@@ -10,6 +10,13 @@ A tabbed Notepad clone built with WinUI 3 (Windows App SDK 1.7) and C++/WinRT.
 Open `MyNotepad.sln`, choose a platform (x64 / x86 / ARM64), and press F5. NuGet packages restore automatically.
 The app is **unpackaged and self-contained**: the Windows App SDK runtime ships next to `MyNotepad.exe`, so no MSIX install is needed.
 
+## Packaging
+Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist\MyNotepad-x64.zip`). It contains a `MyNotepad` folder with everything needed to run the app. Debug symbols and other build by-products are left out. Unzip it anywhere and run `MyNotepad.exe`.
+
+- Target machines also need the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) for the same architecture, which the zip doesn't include.
+- To skip the zip, build with `/p:CreateZipPackage=false`. To get a zip from another configuration, build with `/p:CreateZipPackage=true`.
+- The step is the `CreateZipPackage` target at the end of `MyNotepad.vcxproj`.
+
 ## Features
 - Tabs in the title bar: new (Ctrl+N / Ctrl+T / +), close (Ctrl+W, Ctrl+F4), cycle (Ctrl+Tab), jump to a tab (Ctrl+1..9), reorder by dragging
 - Open (multi-select), Save, Save As (with an Encoding picker), Save All (Ctrl+Alt+S); prompts to save when closing a tab or the window

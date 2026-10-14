@@ -169,6 +169,29 @@
     so the file is added once per distinct set of definitions: twice here. The duplicate causes warnings
     MSB8027 and LNK4042 and makes the file recompile on every build. Keep only the first copy.
   -->
+  <!--
+    After a Release build, zip the app for distribution as dist\MyNotepad-<platform>.zip, containing a
+    MyNotepad folder with everything needed to run it. Files only used during development are left out.
+    The Visual C++ runtime (MSVCP140.dll, VCRUNTIME140.dll) isn't included; target machines need the
+    Visual C++ Redistributable. Set CreateZipPackage=false to skip this step.
+  -->
+  <PropertyGroup>
+    <CreateZipPackage Condition="'$(CreateZipPackage)' == '' and '$(Configuration)' == 'Release'">true</CreateZipPackage>
+    <ZipPackageDir>$(MSBuildProjectDirectory)\..\dist\</ZipPackageDir>
+    <ZipPackagePath>$(ZipPackageDir)$(ProjectName)-$(Platform).zip</ZipPackagePath>
+    <ZipStagingDir>$(MSBuildProjectDirectory)\$(IntDir)zip\</ZipStagingDir>
+  </PropertyGroup>
+  <Target Name="CreateZipPackage" AfterTargets="Build" Condition="'$(CreateZipPackage)' == 'true'">
+    <ItemGroup>
+      <_ZipPackageFile Include="$(OutDir)**\*" Exclude="$(OutDir)**\*.pdb;$(OutDir)**\*.lib;$(OutDir)**\*.exp;$(OutDir)$(TargetName).winmd;$(OutDir)*.ico" />
+    </ItemGroup>
+    <RemoveDir Directories="$(ZipStagingDir)" />
+    <Copy SourceFiles="@(_ZipPackageFile)" DestinationFiles="@(_ZipPackageFile->'$(ZipStagingDir)$(ProjectName)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <MakeDir Directories="$(ZipPackageDir)" />
+    <ZipDirectory SourceDirectory="$(ZipStagingDir)" DestinationFile="$(ZipPackagePath)" Overwrite="true" />
+    <RemoveDir Directories="$(ZipStagingDir)" />
+    <Message Importance="high" Text="$(ProjectName) -> $([System.IO.Path]::GetFullPath('$(ZipPackagePath)'))" />
+  </Target>
   <Target Name="RemoveDuplicateAutoInitializer" AfterTargets="WindowsAppRuntimeAutoInitializer">
     <ItemGroup>
       <_AutoInitializerCpp Include="@(ClCompile)" Condition="'%(ClCompile.Filename)%(ClCompile.Extension)' == 'WindowsAppRuntimeAutoInitializer.cpp'" />

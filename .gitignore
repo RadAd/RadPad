@@ -12,3 +12,4 @@ packages/
 *.user
 MyNotepad/XamlMetaDataProvider.cpp
 MyNotepad/XamlMetaDataProvider.idl
+dist/
