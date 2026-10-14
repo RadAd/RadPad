@@ -176,6 +176,8 @@
                         <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Tag="ZoomReset" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
                     </MenuFlyoutSubItem>
                     <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Tag="StatusBar" Click="Command_Click" IsChecked="True" />
+                    <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
+                    <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Tag="ShowWhitespace" Click="Command_Click" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Help">
@@ -235,6 +237,8 @@
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </Grid.Resources>
+                <!-- Draws space and tab markers over the current editor (View > Show whitespace). -->
+                <Canvas x:Name="WhitespaceOverlay" IsHitTestVisible="False" Canvas.ZIndex="1" />
             </Grid>
 
             <!-- Status bar -->

@@ -7,7 +7,7 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
-#include <dwrite.h>
+#include <dwrite_1.h>
 
 // Undefine GetCurrentTime macro to prevent
 // conflict with Storyboard::GetCurrentTime

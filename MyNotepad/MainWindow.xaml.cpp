@@ -161,21 +161,65 @@ namespace
         RichEditTextDocument m_document;
     };
 
-    ScrollViewer FindScrollViewer(DependencyObject const& root)
+    // The first descendant of type T in the visual tree, or nullptr.
+    template <typename T>
+    T FindDescendant(DependencyObject const& root)
     {
         for (int i = 0, count = VisualTreeHelper::GetChildrenCount(root); i < count; ++i)
         {
             auto child = VisualTreeHelper::GetChild(root, i);
-            if (auto viewer = child.try_as<ScrollViewer>())
+            if (auto match = child.try_as<T>())
             {
-                return viewer;
+                return match;
             }
-            if (auto viewer = FindScrollViewer(child))
+            if (auto match = FindDescendant<T>(child))
             {
-                return viewer;
+                return match;
             }
         }
         return nullptr;
+    }
+
+    // Whether a font is monospaced and, if so, its character advance as a fraction of the font size.
+    std::optional<double> MonospacedAdvance(std::wstring const& family, bool bold, bool italic)
+    {
+        com_ptr<IDWriteFactory> factory;
+        com_ptr<IDWriteFontCollection> collection;
+        if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<::IUnknown**>(factory.put())))
+            || FAILED(factory->GetSystemFontCollection(collection.put())))
+        {
+            return std::nullopt;
+        }
+
+        UINT32 index = 0;
+        BOOL exists = FALSE;
+        com_ptr<IDWriteFontFamily> fontFamily;
+        com_ptr<IDWriteFont> font;
+        com_ptr<IDWriteFontFace> face;
+        if (FAILED(collection->FindFamilyName(family.c_str(), &index, &exists)) || !exists
+            || FAILED(collection->GetFontFamily(index, fontFamily.put()))
+            || FAILED(fontFamily->GetFirstMatchingFont(bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, font.put()))
+            || FAILED(font->CreateFontFace(face.put())))
+        {
+            return std::nullopt;
+        }
+        auto font1 = font.try_as<IDWriteFont1>();
+        if (!font1 || !font1->IsMonospacedFont())
+        {
+            return std::nullopt;
+        }
+
+        DWRITE_FONT_METRICS metrics{};
+        face->GetMetrics(&metrics);
+        UINT32 codePoint = L'0';
+        UINT16 glyph = 0;
+        DWRITE_GLYPH_METRICS glyphMetrics{};
+        if (FAILED(face->GetGlyphIndices(&codePoint, 1, &glyph)) || FAILED(face->GetDesignGlyphMetrics(&glyph, 1, &glyphMetrics, FALSE)) || metrics.designUnitsPerEm == 0)
+        {
+            return std::nullopt;
+        }
+        return static_cast<double>(glyphMetrics.advanceWidth) / metrics.designUnitsPerEm;
     }
 
     bool IsSpace(wchar_t c)
@@ -450,6 +494,8 @@ namespace winrt::MyNotepad::implementation
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
         AddZoomAccelerators();
         BuildLanguageMenus();
+        ShowWhitespaceItem().IsChecked(m_showWhitespace);
+        UpdateWhitespaceAvailability();
 
         // Syntax colours differ between light and dark themes.
         RootGrid().ActualThemeChanged([this](auto&&, auto&&)
@@ -611,7 +657,7 @@ namespace winrt::MyNotepad::implementation
             }
             if (!d->ScrollViewer)
             {
-                if (auto viewer = FindScrollViewer(sender.as<DependencyObject>()))
+                if (auto viewer = FindDescendant<ScrollViewer>(sender.as<DependencyObject>()))
                 {
                     d->ScrollViewer = viewer;
                     viewer.ViewChanged([this, weakDoc](auto&&, auto&&)
@@ -619,6 +665,10 @@ namespace winrt::MyNotepad::implementation
                         if (auto scrolled = weakDoc.lock())
                         {
                             ScheduleRepaint(scrolled);
+                            if (scrolled == CurrentDocument())
+                            {
+                                UpdateWhitespaceOverlay(); // keep the markers in step while scrolling
+                            }
                         }
                     });
                 }
@@ -970,9 +1020,11 @@ namespace winrt::MyNotepad::implementation
         StatusMessageText().Text(L"");
         UpdateTitle();
         UpdateStatusBar();
+        UpdateWhitespaceOverlay();
         if (current)
         {
             FocusEditor(current);
+            ScheduleRepaint(current);
         }
     }
 
@@ -1059,12 +1111,19 @@ namespace winrt::MyNotepad::implementation
         {
             m_wordWrap = WordWrapItem().IsChecked();
             ApplyEditorSettingsToAll();
+            UpdateWhitespaceAvailability();
             return;
         }
         if (command == L"StatusBar")
         {
             m_statusBarVisible = StatusBarItem().IsChecked();
             StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
+            return;
+        }
+        if (command == L"ShowWhitespace")
+        {
+            m_showWhitespace = ShowWhitespaceItem().IsChecked();
+            UpdateWhitespaceOverlay();
             return;
         }
 
@@ -1285,6 +1344,7 @@ namespace winrt::MyNotepad::implementation
             {
                 UpdateCaretPosition();
             }
+            ScheduleRepaint(d); // updates visible whitespace once the edit is laid out
         });
     }
 
@@ -1454,8 +1514,135 @@ namespace winrt::MyNotepad::implementation
                 {
                     PaintVisibleText(d);
                 }
+                if (d == CurrentDocument())
+                {
+                    UpdateWhitespaceOverlay(); // after layout, so it matches the text
+                }
             }
         });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Visible whitespace
+    // ---------------------------------------------------------------------------------------------
+
+    void MainWindow::UpdateWhitespaceAvailability()
+    {
+        // Markers are placed by column, which needs a monospaced font and unwrapped lines.
+        m_monospacedAdvance = MonospacedAdvance(m_fontFamily, m_fontBold, m_fontItalic);
+        bool available = m_monospacedAdvance.has_value() && !m_wordWrap;
+        ShowWhitespaceItem().IsEnabled(available);
+        ToolTipService::SetToolTip(ShowWhitespaceItem(), available ? nullptr : box_value(L"Needs a monospaced font with word wrap off"));
+        UpdateWhitespaceOverlay();
+    }
+
+    void MainWindow::UpdateWhitespaceOverlay()
+    {
+        auto overlay = WhitespaceOverlay();
+        overlay.Children().Clear();
+
+        auto doc = CurrentDocument();
+        if (!m_showWhitespace || m_wordWrap || !m_monospacedAdvance || !doc || !doc->ScrollViewer)
+        {
+            return;
+        }
+        auto viewer = doc->ScrollViewer;
+        auto presenter = FindDescendant<ScrollContentPresenter>(viewer);
+        if (!presenter || presenter.ActualHeight() <= 0)
+        {
+            return;
+        }
+
+        // Every line is the same height and, in a monospaced font, every character the same width, so
+        // a character's position follows from its line and column.
+        auto text = EditorText(doc->Editor);
+        int lineCount = LineCount(text);
+        double lineHeight = viewer.ExtentHeight() / lineCount;
+        double charWidth = *m_monospacedAdvance * m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0;
+        double tabWidth = doc->Editor.Document().DefaultTabStop() * 96.0 / 72.0;
+        if (lineHeight <= 0 || charWidth <= 0)
+        {
+            return;
+        }
+        if (tabWidth <= 0)
+        {
+            tabWidth = charWidth * 8;
+        }
+
+        // The text is laid out from the viewport's top-left corner, less the scroll offset.
+        auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
+        double width = presenter.ActualWidth();
+        double height = presenter.ActualHeight();
+        double scrollX = viewer.HorizontalOffset();
+        double scrollY = viewer.VerticalOffset();
+        auto point = [&](double x, double y)
+        {
+            return Point{ static_cast<float>(origin.X + x - scrollX), static_cast<float>(origin.Y + y - scrollY) };
+        };
+
+        RectangleGeometry clip;
+        clip.Rect({ origin.X, origin.Y, static_cast<float>(width), static_cast<float>(height) });
+        overlay.Clip(clip);
+
+        GeometryGroup shapes;
+        auto line = [&](Point from, Point to)
+        {
+            LineGeometry geometry;
+            geometry.StartPoint(from);
+            geometry.EndPoint(to);
+            shapes.Children().Append(geometry);
+        };
+        auto dotRadius = static_cast<float>(std::max(1.0, charWidth * 0.1));
+        double arrowHead = charWidth * 0.3;
+
+        int firstLine = static_cast<int>(scrollY / lineHeight);
+        int lastLine = std::min(lineCount - 1, static_cast<int>((scrollY + height) / lineHeight) + 1);
+        auto i = static_cast<size_t>(IndexOfLine(text, firstLine + 1));
+        for (int lineIndex = firstLine; lineIndex <= lastLine && i <= text.size(); ++lineIndex, ++i)
+        {
+            double y = (lineIndex + 0.5) * lineHeight;
+            double x = 0;
+            for (; i < text.size() && text[i] != L'\r'; ++i)
+            {
+                wchar_t c = text[i];
+                bool visible = x + tabWidth > scrollX && x < scrollX + width;
+                if (c == L'\t')
+                {
+                    // A tab runs to the next tab stop: an arrow across that width.
+                    double next = (std::floor(x / tabWidth + 1e-3) + 1) * tabWidth;
+                    if (visible)
+                    {
+                        double end = next - charWidth * 0.2;
+                        line(point(x + charWidth * 0.2, y), point(end, y));
+                        line(point(end - arrowHead, y - arrowHead), point(end, y));
+                        line(point(end - arrowHead, y + arrowHead), point(end, y));
+                    }
+                    x = next;
+                    continue;
+                }
+                if (c == L' ' && visible)
+                {
+                    EllipseGeometry geometry;
+                    geometry.Center(point(x + charWidth / 2, y));
+                    geometry.RadiusX(dotRadius);
+                    geometry.RadiusY(dotRadius);
+                    shapes.Children().Append(geometry);
+                }
+                if (!IS_LOW_SURROGATE(c))
+                {
+                    x += charWidth;
+                }
+            }
+        }
+
+        Windows::UI::Color color{ 0x80, 0x80, 0x80, 0x80 };
+        SolidColorBrush brush{ color };
+        Shapes::Path path;
+        path.Data(shapes);
+        path.Fill(brush);
+        path.Stroke(brush);
+        path.StrokeThickness(1);
+        overlay.Children().Append(path);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -1987,6 +2174,7 @@ namespace winrt::MyNotepad::implementation
         m_fontItalic = style % 2 == 1;
         m_fontPoints = readSize();
         ApplyEditorSettingsToAll();
+        UpdateWhitespaceAvailability();
         SaveSettings();
     }
 
@@ -2059,6 +2247,7 @@ namespace winrt::MyNotepad::implementation
         m_fontItalic = GetPrivateProfileIntW(L"Editor", L"Italic", 0, path.c_str()) != 0;
         m_wordWrap = GetPrivateProfileIntW(L"Editor", L"WordWrap", 0, path.c_str()) != 0;
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
+        m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
     }
 
     void MainWindow::SaveSettings()
@@ -2075,5 +2264,6 @@ namespace winrt::MyNotepad::implementation
         WritePrivateProfileStringW(L"Editor", L"Italic", m_fontItalic ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"Editor", L"WordWrap", m_wordWrap ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
     }
 }

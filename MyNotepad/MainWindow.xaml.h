@@ -96,6 +96,10 @@ namespace winrt::MyNotepad::implementation
         void UndoOrRedo(std::shared_ptr<Document> const& doc, bool redo);
         void ClearUndoHistory(std::shared_ptr<Document> const& doc);
         void SetLanguage(std::shared_ptr<Document> const& doc, syntax::Language language);
+
+        // Visible whitespace
+        void UpdateWhitespaceOverlay();
+        void UpdateWhitespaceAvailability();
         void BuildLanguageMenus();
 
         // Window lifetime
@@ -148,6 +152,8 @@ namespace winrt::MyNotepad::implementation
         bool m_fontItalic{ false };
         bool m_wordWrap{ false };
         bool m_statusBarVisible{ true };
+        bool m_showWhitespace{ false };
+        std::optional<double> m_monospacedAdvance; // character width / font size for the editor font, if monospaced
         int m_zoom{ 100 };
         bool m_loaded{ false };
         bool m_dialogOpen{ false };
