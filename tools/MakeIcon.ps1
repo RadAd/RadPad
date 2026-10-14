@@ -1,5 +1,5 @@
-# Draws the MyNotepad app icon at each standard Windows size and writes it as a .ico.
-# Usage: powershell -File tools/MakeIcon.ps1 -OutIco MyNotepad/MyNotepad.ico [-PreviewDir <folder for PNG previews>]
+# Draws the RadPad app icon at each standard Windows size and writes it as a .ico.
+# Usage: powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico [-PreviewDir <folder for PNG previews>]
 param([string]$OutIco, [string]$PreviewDir)
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing

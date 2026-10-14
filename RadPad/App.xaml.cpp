@@ -6,7 +6,7 @@
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 
-namespace winrt::MyNotepad::implementation
+namespace winrt::RadPad::implementation
 {
     App::App()
     {

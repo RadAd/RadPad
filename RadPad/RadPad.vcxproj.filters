@@ -27,8 +27,8 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
-    <ResourceCompile Include="MyNotepad.rc" />
-    <Image Include="MyNotepad.ico" />
+    <ResourceCompile Include="RadPad.rc" />
+    <Image Include="RadPad.ico" />
     <None Include="packages.config" />
     <None Include="Languages\batch.json">
       <Filter>Languages</Filter>

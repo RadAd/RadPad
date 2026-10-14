@@ -7,8 +7,8 @@
     <CppWinRTOptimized>true</CppWinRTOptimized>
     <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
     <ProjectGuid>{7A1C3E52-9B4D-4F6E-8C21-3D5B9E0A4F17}</ProjectGuid>
-    <ProjectName>MyNotepad</ProjectName>
-    <RootNamespace>MyNotepad</RootNamespace>
+    <ProjectName>RadPad</ProjectName>
+    <RootNamespace>RadPad</RootNamespace>
     <DefaultLanguage>en-US</DefaultLanguage>
     <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
     <AppContainerApplication>false</AppContainerApplication>
@@ -103,8 +103,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
-    <ResourceCompile Include="MyNotepad.rc" />
-    <Image Include="MyNotepad.ico" />
+    <ResourceCompile Include="RadPad.rc" />
+    <Image Include="RadPad.ico" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -227,8 +227,8 @@
     MSB8027 and LNK4042 and makes the file recompile on every build. Keep only the first copy.
   -->
   <!--
-    After a Release build, zip the app for distribution as dist\MyNotepad-<platform>.zip, containing a
-    MyNotepad folder with everything needed to run it. Files only used during development are left out.
+    After a Release build, zip the app for distribution as dist\RadPad-<platform>.zip, containing a
+    RadPad folder with everything needed to run it. Files only used during development are left out.
     The Visual C++ runtime (MSVCP140.dll, VCRUNTIME140.dll) isn't included; target machines need the
     Visual C++ Redistributable. Set CreateZipPackage=false to skip this step.
   -->

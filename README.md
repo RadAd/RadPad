@@ -1,4 +1,4 @@
-# MyNotepad
+# RadPad
 
 A tabbed Notepad clone built with WinUI 3 (Windows App SDK 1.7) and C++/WinRT.
 
@@ -7,15 +7,15 @@ A tabbed Notepad clone built with WinUI 3 (Windows App SDK 1.7) and C++/WinRT.
 - Windows 10 1809 or later
 
 ## Build and run
-Open `MyNotepad.sln`, choose a platform (x64 / x86 / ARM64), and press F5. NuGet packages restore automatically.
-The app is **unpackaged and self-contained**: the Windows App SDK runtime ships next to `MyNotepad.exe`, so no MSIX install is needed.
+Open `RadPad.sln`, choose a platform (x64 / x86 / ARM64), and press F5. NuGet packages restore automatically.
+The app is **unpackaged and self-contained**: the Windows App SDK runtime ships next to `RadPad.exe`, so no MSIX install is needed.
 
 ## Packaging
-Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist\MyNotepad-x64.zip`). It contains a `MyNotepad` folder with everything needed to run the app. Debug symbols and other build by-products are left out. Unzip it anywhere and run `MyNotepad.exe`.
+Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\RadPad-x64.zip`). It contains a `RadPad` folder with everything needed to run the app. Debug symbols and other build by-products are left out. Unzip it anywhere and run `RadPad.exe`.
 
 - Target machines also need the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) for the same architecture, which the zip doesn't include.
 - To skip the zip, build with `/p:CreateZipPackage=false`. To get a zip from another configuration, build with `/p:CreateZipPackage=true`.
-- The step is the `CreateZipPackage` target at the end of `MyNotepad.vcxproj`.
+- The step is the `CreateZipPackage` target at the end of `RadPad.vcxproj`.
 
 ## Features
 - Tabs in the title bar: new (Ctrl+N / Ctrl+T / +), close (Ctrl+W, Ctrl+F4), switch to recently used tabs (Ctrl+Tab goes to the previous tab; hold Ctrl and press Tab again to go further back, Ctrl+Shift+Tab to go the other way), jump to a tab (Ctrl+1..9), reorder by dragging
@@ -30,10 +30,10 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 - **View > Highlight trailing whitespace** (on by default) shades spaces and tabs at the ends of lines, including lines that are only whitespace. Whitespace ending at the cursor isn't shaded, so it doesn't flash while you type.
 - With word wrap on, a `↵` marker in the right margin shows each row that continues on the next row, so wrapped lines can be told apart from separate lines.
 - Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Light and dark themes have their own colours. Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
-- Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the MyNotepad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting MyNotepad without files always opens a new window.
+- Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the RadPad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting RadPad without files always opens a new window.
 - **File > Recent files** lists the last 10 files opened or saved, newest first. Choosing a file that no longer exists removes it from the list.
-- The same files appear under **Recent** when you right-click MyNotepad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
-- Settings and the recent files list are saved to `%LOCALAPPDATA%\MyNotepad\settings.ini` (UTF-16, so paths in any language are kept)
+- The same files appear under **Recent** when you right-click RadPad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
+- Settings and the recent files list are saved to `%LOCALAPPDATA%\RadPad\settings.ini` (UTF-16, so paths in any language are kept). The app used to be called MyNotepad: the first time it runs, it copies `%LOCALAPPDATA%\MyNotepad` there and leaves the old folder in place.
 
 ## Source layout
 | File | Purpose |
@@ -44,8 +44,8 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 | `Syntax.h` / `.cpp` | Loads the language definitions, detects a file's language and tokenizes text for highlighting |
 | `Languages/*.json` | The built-in language definitions, copied to the output's `Languages` folder |
 | `App.xaml` / `.cpp` | Application entry point |
-| `MyNotepad.ico` / `MyNotepad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
-| `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco MyNotepad/MyNotepad.ico` after changing it |
+| `RadPad.ico` / `RadPad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
+| `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico` after changing it |
 
 ## How highlighting works
 Each tab's editor is a `RichEditBox` used as a plain-text editor. After each edit, `Syntax.cpp` tokenizes the whole document, then `MainWindow` recolours only the characters whose colour changed, and only in and near the visible part of the document. More is coloured as you scroll. Colouring a range is slow in RichEdit, so this keeps typing and opening large files responsive.
@@ -53,10 +53,10 @@ Each tab's editor is a `RichEditBox` used as a plain-text editor. After each edi
 RichEditBox's own undo is turned off because it also records formatting changes, which would make Ctrl+Z undo colours. `MainWindow` keeps its own undo history of text edits instead, grouping typing and deletions by word. For the same reason, paste always inserts plain text.
 
 ## Adding or changing a language
-Each language is a JSON file. MyNotepad loads them at startup from two folders:
+Each language is a JSON file. RadPad loads them at startup from two folders:
 
-1. `Languages` next to `MyNotepad.exe`: the built-in definitions, replaced when the app is updated.
-2. `%LOCALAPPDATA%\MyNotepad\Languages`: your own. **Format > Language > Open language folder** opens it.
+1. `Languages` next to `RadPad.exe`: the built-in definitions, replaced when the app is updated.
+2. `%LOCALAPPDATA%\RadPad\Languages`: your own. **Format > Language > Open language folder** opens it.
 
 To add a language, create a `.json` file in your folder. To change a built-in one, copy its file into your folder and edit the copy. A definition with the same `name` replaces the built-in one, so updates won't overwrite your changes. Use **Format > Language > Reload languages** to apply edits without restarting. Files that can't be loaded are listed in a message, with the reason.
 

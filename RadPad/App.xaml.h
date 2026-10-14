@@ -2,7 +2,7 @@
 
 #include "App.xaml.g.h"
 
-namespace winrt::MyNotepad::implementation
+namespace winrt::RadPad::implementation
 {
     struct App : AppT<App>
     {

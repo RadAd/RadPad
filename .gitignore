@@ -3,13 +3,13 @@ x64/
 ARM64/
 Debug/
 Release/
-MyNotepad/x64/
-MyNotepad/ARM64/
-MyNotepad/Debug/
-MyNotepad/Release/
-MyNotepad/Generated Files/
+RadPad/x64/
+RadPad/ARM64/
+RadPad/Debug/
+RadPad/Release/
+RadPad/Generated Files/
 packages/
 *.user
-MyNotepad/XamlMetaDataProvider.cpp
-MyNotepad/XamlMetaDataProvider.idl
+RadPad/XamlMetaDataProvider.cpp
+RadPad/XamlMetaDataProvider.idl
 dist/

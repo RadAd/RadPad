@@ -4,7 +4,7 @@
 #include "Syntax.h"
 #include "TextFile.h"
 
-namespace winrt::MyNotepad::implementation
+namespace winrt::RadPad::implementation
 {
     // One undoable edit: at Start, Removed was replaced by Inserted.
     struct UndoRecord
@@ -256,7 +256,7 @@ namespace winrt::MyNotepad::implementation
     };
 }
 
-namespace winrt::MyNotepad::factory_implementation
+namespace winrt::RadPad::factory_implementation
 {
     struct MainWindow : MainWindowT<MainWindow, implementation::MainWindow>
     {

@@ -28,7 +28,7 @@ using textfile::TextEncoding;
 
 namespace
 {
-    constexpr std::wstring_view AppName = L"MyNotepad";
+    constexpr std::wstring_view AppName = L"RadPad";
     constexpr int DefaultZoom = 100;
     constexpr int MinZoom = 10;
     constexpr int MaxZoom = 500;
@@ -400,16 +400,37 @@ namespace
         return line <= 1 ? 0 : static_cast<int>(text.size());
     }
 
-    std::wstring SettingsFilePath()
+    // %LOCALAPPDATA%\RadPad, where settings and the user's language definitions are kept. The app was
+    // called MyNotepad before, so the first time, the old folder's contents are copied in; the old folder
+    // is left as it was.
+    std::wstring AppDataFolder()
     {
         PWSTR folder = nullptr;
         if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &folder)))
         {
             return {};
         }
-        std::wstring directory = std::wstring(folder) + L"\\MyNotepad";
+        std::wstring localAppData{ folder };
         CoTaskMemFree(folder);
-        CreateDirectoryW(directory.c_str(), nullptr);
+
+        std::filesystem::path directory = localAppData + L"\\RadPad";
+        std::filesystem::path oldDirectory = localAppData + L"\\MyNotepad";
+        std::error_code error;
+        if (!std::filesystem::exists(directory, error) && std::filesystem::is_directory(oldDirectory, error))
+        {
+            std::filesystem::copy(oldDirectory, directory, std::filesystem::copy_options::recursive, error);
+        }
+        std::filesystem::create_directories(directory, error);
+        return directory.wstring();
+    }
+
+    std::wstring SettingsFilePath()
+    {
+        std::wstring directory = AppDataFolder();
+        if (directory.empty())
+        {
+            return {};
+        }
         std::wstring path = directory + L"\\settings.ini";
 
         // The profile functions only write Unicode to a file that starts with a UTF-16 byte order mark;
@@ -439,17 +460,11 @@ namespace
         return path;
     }
 
-    // %LOCALAPPDATA%\MyNotepad\Languages: language definitions added or customised by the user.
+    // %LOCALAPPDATA%\RadPad\Languages: language definitions added or customised by the user.
     std::wstring UserLanguageFolder()
     {
-        PWSTR folder = nullptr;
-        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &folder)))
-        {
-            return {};
-        }
-        std::wstring path = std::wstring(folder) + L"\\MyNotepad\\Languages";
-        CoTaskMemFree(folder);
-        return path;
+        std::wstring directory = AppDataFolder();
+        return directory.empty() ? std::wstring{} : directory + L"\\Languages";
     }
 
     // Where language definitions are loaded from: the Languages folder installed beside the exe, then
@@ -678,7 +693,7 @@ namespace
     }
 }
 
-namespace winrt::MyNotepad::implementation
+namespace winrt::RadPad::implementation
 {
     std::wstring Document::DisplayName() const
     {
@@ -706,7 +721,7 @@ namespace winrt::MyNotepad::implementation
 
         UINT dpi = GetDpiForWindow(WindowHandle());
 
-        // The app icon from MyNotepad.rc, for Alt+Tab and the taskbar. The small icon is loaded separately
+        // The app icon from RadPad.rc, for Alt+Tab and the taskbar. The small icon is loaded separately
         // so the 16-24 px artwork is used rather than a shrunken large icon.
         auto loadIcon = [dpi](int metric)
         {
@@ -801,7 +816,7 @@ namespace winrt::MyNotepad::implementation
         }
         m_loaded = true;
 
-        // Open any files passed on the command line, e.g. "MyNotepad.exe a.txt b.txt".
+        // Open any files passed on the command line, e.g. "RadPad.exe a.txt b.txt".
         int argc = 0;
         if (auto argv = CommandLineToArgvW(GetCommandLineW(), &argc))
         {
@@ -1163,7 +1178,7 @@ namespace winrt::MyNotepad::implementation
     {
         // The list shown when right-clicking the app on the taskbar. Windows' own Recent category only
         // shows file types registered to an app, and this unpackaged app registers none, so the recent
-        // files are added as a custom category of shortcuts that start MyNotepad with the file.
+        // files are added as a custom category of shortcuts that start RadPad with the file.
         try
         {
             auto list = create_instance<ICustomDestinationList>(CLSID_DestinationList);
@@ -3388,7 +3403,7 @@ namespace winrt::MyNotepad::implementation
     {
         auto strong = get_strong();
         ContentDialog dialog;
-        dialog.Title(box_value(L"About MyNotepad"));
+        dialog.Title(box_value(L"About RadPad"));
         dialog.Content(box_value(L"A tabbed Notepad clone built with WinUI 3 and C++/WinRT."));
         dialog.CloseButtonText(L"OK");
         dialog.DefaultButton(ContentDialogButton::Close);
@@ -3429,7 +3444,7 @@ namespace winrt::MyNotepad::implementation
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Settings (%LOCALAPPDATA%\MyNotepad\settings.ini)
+    // Settings (%LOCALAPPDATA%\RadPad\settings.ini)
     // ---------------------------------------------------------------------------------------------
 
     void MainWindow::LoadSettings()

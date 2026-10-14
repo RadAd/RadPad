@@ -5,8 +5,8 @@ using namespace winrt;
 
 namespace
 {
-    // Window property that marks MyNotepad's main windows, and the WM_COPYDATA message id.
-    constexpr wchar_t WindowProperty[] = L"MyNotepad.MainWindow";
+    // Window property that marks RadPad's main windows, and the WM_COPYDATA message id.
+    constexpr wchar_t WindowProperty[] = L"RadPad.MainWindow";
     constexpr ULONG_PTR OpenFilesMessage = 0x4D4E4F46; // 'MNOF'
 
     std::vector<std::wstring> CommandLineFiles()
@@ -35,7 +35,7 @@ namespace
         return files;
     }
 
-    // MyNotepad windows on the current virtual desktop, frontmost first.
+    // RadPad windows on the current virtual desktop, frontmost first.
     std::vector<HWND> WindowsOnCurrentDesktop()
     {
         std::vector<HWND> windows;
