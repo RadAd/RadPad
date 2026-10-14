@@ -1,0 +1,14 @@
+.vs/
+x64/
+ARM64/
+Debug/
+Release/
+MyNotepad/x64/
+MyNotepad/ARM64/
+MyNotepad/Debug/
+MyNotepad/Release/
+MyNotepad/Generated Files/
+packages/
+*.user
+MyNotepad/XamlMetaDataProvider.cpp
+MyNotepad/XamlMetaDataProvider.idl
