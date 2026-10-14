@@ -61,13 +61,58 @@ namespace winrt::MyNotepad::implementation
         void Tabs_AddTabButtonClick(Microsoft::UI::Xaml::Controls::TabView const& sender, Windows::Foundation::IInspectable const& e);
         void Tabs_TabCloseRequested(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabCloseRequestedEventArgs const& e);
         void Tabs_SelectionChanged(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& e);
-        void Command_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
-        void Encoding_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
-        void LineEnding_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
         void FindBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void ReplaceBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void TabMenu_Opening(Windows::Foundation::IInspectable const& sender, Windows::Foundation::IInspectable const& e);
-        void TabMenu_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
+
+        // Menu and button commands, one handler per item
+        using Sender = Windows::Foundation::IInspectable;
+        using ClickArgs = Microsoft::UI::Xaml::RoutedEventArgs;
+        void NewTab_Click(Sender const&, ClickArgs const&);
+        void Open_Click(Sender const&, ClickArgs const&);
+        void Save_Click(Sender const&, ClickArgs const&);
+        void SaveAs_Click(Sender const&, ClickArgs const&);
+        void SaveAll_Click(Sender const&, ClickArgs const&);
+        void CloseTab_Click(Sender const&, ClickArgs const&);
+        void Exit_Click(Sender const&, ClickArgs const&);
+        void Undo_Click(Sender const&, ClickArgs const&);
+        void Redo_Click(Sender const&, ClickArgs const&);
+        void Cut_Click(Sender const&, ClickArgs const&);
+        void Copy_Click(Sender const&, ClickArgs const&);
+        void Paste_Click(Sender const&, ClickArgs const&);
+        void Delete_Click(Sender const&, ClickArgs const&);
+        void Find_Click(Sender const&, ClickArgs const&);
+        void FindNext_Click(Sender const&, ClickArgs const&);
+        void FindPrevious_Click(Sender const&, ClickArgs const&);
+        void Replace_Click(Sender const&, ClickArgs const&);
+        void ReplaceOne_Click(Sender const&, ClickArgs const&);
+        void ReplaceAll_Click(Sender const&, ClickArgs const&);
+        void CloseFind_Click(Sender const&, ClickArgs const&);
+        void GoTo_Click(Sender const&, ClickArgs const&);
+        void SelectAll_Click(Sender const&, ClickArgs const&);
+        void TimeDate_Click(Sender const&, ClickArgs const&);
+        void WordWrap_Click(Sender const&, ClickArgs const&);
+        void Font_Click(Sender const&, ClickArgs const&);
+        void ZoomIn_Click(Sender const&, ClickArgs const&);
+        void ZoomOut_Click(Sender const&, ClickArgs const&);
+        void ZoomReset_Click(Sender const&, ClickArgs const&);
+        void StatusBar_Click(Sender const&, ClickArgs const&);
+        void ShowWhitespace_Click(Sender const&, ClickArgs const&);
+        void About_Click(Sender const&, ClickArgs const&);
+        void Crlf_Click(Sender const&, ClickArgs const&);
+        void Lf_Click(Sender const&, ClickArgs const&);
+        void Cr_Click(Sender const&, ClickArgs const&);
+        void Utf8_Click(Sender const&, ClickArgs const&);
+        void Utf8Bom_Click(Sender const&, ClickArgs const&);
+        void Utf16LE_Click(Sender const&, ClickArgs const&);
+        void Utf16BE_Click(Sender const&, ClickArgs const&);
+        void Ansi_Click(Sender const&, ClickArgs const&);
+        void TabCopyName_Click(Sender const&, ClickArgs const&);
+        void TabCopyPath_Click(Sender const&, ClickArgs const&);
+        void TabOpenFolder_Click(Sender const&, ClickArgs const&);
+        void TabClose_Click(Sender const&, ClickArgs const&);
+        void TabCloseOthers_Click(Sender const&, ClickArgs const&);
+        void TabCloseRight_Click(Sender const&, ClickArgs const&);
 
     private:
         // Documents and tabs
@@ -132,7 +177,9 @@ namespace winrt::MyNotepad::implementation
         HWND WindowHandle();
 
         // UI state
-        void ExecuteCommand(std::wstring_view command);
+        void EditCurrentDocument(std::function<void(std::shared_ptr<Document> const&)> const& edit);
+        void SetEncoding(textfile::TextEncoding encoding);
+        void SetLineEnding(textfile::LineEnding eol);
         void UpdateDocumentState(std::shared_ptr<Document> const& doc);
         void UpdateTitle();
         void UpdateStatusBar();
@@ -171,6 +218,7 @@ namespace winrt::MyNotepad::implementation
 
         std::vector<std::shared_ptr<Document>> m_documents;
         std::weak_ptr<Document> m_tabMenuDocument; // the tab whose right-click menu is open
+        std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, syntax::LanguageId>> m_languageItems; // both language menus
         std::wstring m_fontFamily{ L"Consolas" };
         double m_fontPoints{ 11.0 };
         bool m_fontBold{ false };

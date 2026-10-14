@@ -75,11 +75,6 @@ namespace
         return text;
     }
 
-    int TagIndex(IInspectable const& sender)
-    {
-        return _wtoi(unbox_value<hstring>(sender.as<FrameworkElement>().Tag()).c_str());
-    }
-
     bool IsChecked(Primitives::ToggleButton const& toggle)
     {
         auto value = toggle.IsChecked();
@@ -250,18 +245,6 @@ namespace
         auto index = static_cast<size_t>(kind);
         uint32_t rgb = (dark ? darkColors : lightColors)[index < std::size(lightColors) ? index : 0];
         return { 0xFF, static_cast<uint8_t>(rgb >> 16), static_cast<uint8_t>(rgb >> 8), static_cast<uint8_t>(rgb) };
-    }
-
-    // Checks the radio item whose Tag is index.
-    void CheckRadioItem(Collections::IVector<MenuFlyoutItemBase> const& items, int index)
-    {
-        for (auto const& item : items)
-        {
-            if (auto radio = item.try_as<RadioMenuFlyoutItem>())
-            {
-                radio.IsChecked(TagIndex(radio) == index);
-            }
-        }
     }
 
     // Line and column (both 1-based) of a character index. Editor text uses '\r' for every line break.
@@ -1346,87 +1329,86 @@ namespace winrt::MyNotepad::implementation
     void MainWindow::TabMenu_Opening(IInspectable const& sender, IInspectable const&)
     {
         // The menu is shared by all tabs; Target is the tab that was right-clicked.
-        auto menu = sender.as<MenuFlyout>();
-        auto doc = FindDocument(menu.Target());
+        auto doc = FindDocument(sender.as<MenuFlyout>().Target());
         m_tabMenuDocument = doc;
         if (!doc)
         {
             return;
         }
 
+        // An untitled document has no file name or folder yet.
+        bool hasPath = !doc->Path.empty();
+        TabCopyNameItem().IsEnabled(hasPath);
+        TabCopyPathItem().IsEnabled(hasPath);
+        TabOpenFolderItem().IsEnabled(hasPath);
+
         uint32_t index = 0;
         Tabs().TabItems().IndexOf(doc->Tab, index);
-        for (auto const& entry : menu.Items())
-        {
-            auto item = entry.try_as<MenuFlyoutItem>();
-            if (!item)
-            {
-                continue;
-            }
-            auto command = unbox_value_or<hstring>(item.Tag(), L"");
-            if (command == L"TabCopyName" || command == L"TabCopyPath" || command == L"TabOpenFolder")
-            {
-                item.IsEnabled(!doc->Path.empty()); // an untitled document has no file name or folder yet
-            }
-            else if (command == L"TabCloseOthers")
-            {
-                item.IsEnabled(m_documents.size() > 1);
-            }
-            else if (command == L"TabCloseRight")
-            {
-                item.IsEnabled(index + 1 < Tabs().TabItems().Size());
-            }
-        }
+        TabCloseOthersItem().IsEnabled(m_documents.size() > 1);
+        TabCloseRightItem().IsEnabled(index + 1 < Tabs().TabItems().Size());
     }
 
-    void MainWindow::TabMenu_Click(IInspectable const& sender, RoutedEventArgs const&)
+    void MainWindow::TabCopyName_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        auto doc = m_tabMenuDocument.lock();
-        if (!doc)
-        {
-            return;
-        }
-
-        auto command = unbox_value<hstring>(sender.as<FrameworkElement>().Tag());
-        if (command == L"TabCopyName")
+        if (auto doc = m_tabMenuDocument.lock())
         {
             CopyTextToClipboard(doc->DisplayName());
         }
-        else if (command == L"TabCopyPath")
+    }
+
+    void MainWindow::TabCopyPath_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = m_tabMenuDocument.lock())
         {
             CopyTextToClipboard(doc->Path);
         }
-        else if (command == L"TabOpenFolder")
+    }
+
+    void MainWindow::TabOpenFolder_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = m_tabMenuDocument.lock())
         {
             OpenContainingFolder(doc->Path);
         }
-        else if (command == L"TabClose")
+    }
+
+    void MainWindow::TabClose_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = m_tabMenuDocument.lock())
         {
             CloseDocumentAsync(doc);
         }
-        else if (command == L"TabCloseOthers")
+    }
+
+    void MainWindow::TabCloseOthers_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = m_tabMenuDocument.lock())
         {
             std::vector<std::shared_ptr<Document>> others;
             std::copy_if(m_documents.begin(), m_documents.end(), std::back_inserter(others), [&](auto const& d) { return d != doc; });
             CloseDocumentsAsync(std::move(others), doc);
         }
-        else if (command == L"TabCloseRight")
+    }
+
+    void MainWindow::TabCloseRight_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        auto doc = m_tabMenuDocument.lock();
+        uint32_t index = 0;
+        if (!doc || !Tabs().TabItems().IndexOf(doc->Tab, index))
         {
-            // In tab order, which can differ from m_documents after tabs are dragged.
-            std::vector<std::shared_ptr<Document>> right;
-            uint32_t index = 0;
-            if (Tabs().TabItems().IndexOf(doc->Tab, index))
-            {
-                for (uint32_t i = index + 1; i < Tabs().TabItems().Size(); ++i)
-                {
-                    if (auto d = FindDocument(Tabs().TabItems().GetAt(i)))
-                    {
-                        right.push_back(d);
-                    }
-                }
-            }
-            CloseDocumentsAsync(std::move(right), doc);
+            return;
         }
+
+        // In tab order, which can differ from m_documents after tabs are dragged.
+        std::vector<std::shared_ptr<Document>> right;
+        for (uint32_t i = index + 1; i < Tabs().TabItems().Size(); ++i)
+        {
+            if (auto d = FindDocument(Tabs().TabItems().GetAt(i)))
+            {
+                right.push_back(d);
+            }
+        }
+        CloseDocumentsAsync(std::move(right), doc);
     }
 
     void MainWindow::OpenContainingFolder(std::wstring const& path)
@@ -1570,95 +1552,117 @@ namespace winrt::MyNotepad::implementation
     // Commands
     // ---------------------------------------------------------------------------------------------
 
-    void MainWindow::Command_Click(IInspectable const& sender, RoutedEventArgs const&)
+    // Menu and button commands. Each XAML item names its own handler, so a misspelt or missing one fails the build.
+
+    void MainWindow::NewTab_Click(IInspectable const&, RoutedEventArgs const&) { CreateDocument(); }
+    void MainWindow::Open_Click(IInspectable const&, RoutedEventArgs const&) { OpenWithDialog(); }
+    void MainWindow::SaveAll_Click(IInspectable const&, RoutedEventArgs const&) { SaveAll(); }
+    void MainWindow::Exit_Click(IInspectable const&, RoutedEventArgs const&) { TryCloseWindowAsync(); }
+    void MainWindow::Find_Click(IInspectable const&, RoutedEventArgs const&) { ShowFindPanel(false); }
+    void MainWindow::Replace_Click(IInspectable const&, RoutedEventArgs const&) { ShowFindPanel(true); }
+    void MainWindow::CloseFind_Click(IInspectable const&, RoutedEventArgs const&) { HideFindPanel(); }
+    void MainWindow::FindNext_Click(IInspectable const&, RoutedEventArgs const&) { FindNext(true); }
+    void MainWindow::FindPrevious_Click(IInspectable const&, RoutedEventArgs const&) { FindNext(false); }
+    void MainWindow::ReplaceOne_Click(IInspectable const&, RoutedEventArgs const&) { ReplaceOne(); }
+    void MainWindow::ReplaceAll_Click(IInspectable const&, RoutedEventArgs const&) { ReplaceAll(); }
+    void MainWindow::GoTo_Click(IInspectable const&, RoutedEventArgs const&) { GoToLineAsync(); }
+    void MainWindow::Font_Click(IInspectable const&, RoutedEventArgs const&) { ChooseFontAsync(); }
+    void MainWindow::About_Click(IInspectable const&, RoutedEventArgs const&) { ShowAboutAsync(); }
+    void MainWindow::ZoomIn_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(m_zoom + ZoomStep); }
+    void MainWindow::ZoomOut_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(m_zoom - ZoomStep); }
+    void MainWindow::ZoomReset_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(DefaultZoom); }
+
+    void MainWindow::WordWrap_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        ExecuteCommand(unbox_value<hstring>(sender.as<FrameworkElement>().Tag()));
+        m_wordWrap = WordWrapItem().IsChecked();
+        ApplyEditorSettingsToAll();
+        UpdateWhitespaceAvailability();
     }
 
-    void MainWindow::ExecuteCommand(std::wstring_view command)
+    void MainWindow::StatusBar_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        auto doc = CurrentDocument();
-
-        if (command == L"NewTab") { CreateDocument(); return; }
-        if (command == L"Open") { OpenWithDialog(); return; }
-        if (command == L"SaveAll") { SaveAll(); return; }
-        if (command == L"Exit") { TryCloseWindowAsync(); return; }
-        if (command == L"Find") { ShowFindPanel(false); return; }
-        if (command == L"Replace") { ShowFindPanel(true); return; }
-        if (command == L"CloseFind") { HideFindPanel(); return; }
-        if (command == L"FindNext") { FindNext(true); return; }
-        if (command == L"FindPrevious") { FindNext(false); return; }
-        if (command == L"ReplaceOne") { ReplaceOne(); return; }
-        if (command == L"ReplaceAll") { ReplaceAll(); return; }
-        if (command == L"GoTo") { GoToLineAsync(); return; }
-        if (command == L"Font") { ChooseFontAsync(); return; }
-        if (command == L"About") { ShowAboutAsync(); return; }
-        if (command == L"ReloadLanguages") { ReloadLanguages(); return; }
-        if (command == L"OpenLanguageFolder") { OpenLanguageFolder(); return; }
-        if (command == L"ZoomIn") { SetZoom(m_zoom + ZoomStep); return; }
-        if (command == L"ZoomOut") { SetZoom(m_zoom - ZoomStep); return; }
-        if (command == L"ZoomReset") { SetZoom(DefaultZoom); return; }
-
-        if (command == L"WordWrap")
-        {
-            m_wordWrap = WordWrapItem().IsChecked();
-            ApplyEditorSettingsToAll();
-            UpdateWhitespaceAvailability();
-            return;
-        }
-        if (command == L"StatusBar")
-        {
-            m_statusBarVisible = StatusBarItem().IsChecked();
-            StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
-            return;
-        }
-        if (command == L"ShowWhitespace")
-        {
-            m_showWhitespace = ShowWhitespaceItem().IsChecked();
-            UpdateWhitespaceOverlay();
-            return;
-        }
-
-        if (!doc)
-        {
-            return;
-        }
-
-        auto editor = doc->Editor;
-        if (command == L"Save") { SaveDocument(doc, false); return; }
-        if (command == L"SaveAs") { SaveDocument(doc, true); return; }
-        if (command == L"CloseTab") { CloseDocumentAsync(doc); return; }
-
-        if (command == L"Undo") { UndoOrRedo(doc, false); }
-        else if (command == L"Redo") { UndoOrRedo(doc, true); }
-        else if (command == L"Cut") { CopySelection(editor); InsertText(editor, L""); }
-        else if (command == L"Copy") { CopySelection(editor); }
-        else if (command == L"Paste") { PasteAsync(doc); }
-        else if (command == L"Delete") { InsertText(editor, L""); }
-        else if (command == L"SelectAll") { Select(editor, 0, static_cast<int>(EditorText(editor).size())); }
-        else if (command == L"TimeDate") { InsertText(editor, CurrentTimeDate()); }
-        FocusEditor(doc);
+        m_statusBarVisible = StatusBarItem().IsChecked();
+        StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
     }
 
-    void MainWindow::Encoding_Click(IInspectable const& sender, RoutedEventArgs const&)
+    void MainWindow::ShowWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        m_showWhitespace = ShowWhitespaceItem().IsChecked();
+        UpdateWhitespaceOverlay();
+    }
+
+    void MainWindow::Save_Click(IInspectable const&, RoutedEventArgs const&)
     {
         if (auto doc = CurrentDocument())
         {
-            doc->Encoding = static_cast<TextEncoding>(TagIndex(sender));
+            SaveDocument(doc, false);
+        }
+    }
+
+    void MainWindow::SaveAs_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = CurrentDocument())
+        {
+            SaveDocument(doc, true);
+        }
+    }
+
+    void MainWindow::CloseTab_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = CurrentDocument())
+        {
+            CloseDocumentAsync(doc);
+        }
+    }
+
+    void MainWindow::EditCurrentDocument(std::function<void(std::shared_ptr<Document> const&)> const& edit)
+    {
+        // For Edit menu commands: act on the current document, then return focus to its editor.
+        if (auto doc = CurrentDocument())
+        {
+            edit(doc);
+            FocusEditor(doc);
+        }
+    }
+
+    void MainWindow::Undo_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { UndoOrRedo(doc, false); }); }
+    void MainWindow::Redo_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { UndoOrRedo(doc, true); }); }
+    void MainWindow::Cut_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { CopySelection(doc->Editor); InsertText(doc->Editor, L""); }); }
+    void MainWindow::Copy_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { CopySelection(doc->Editor); }); }
+    void MainWindow::Paste_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { PasteAsync(doc); }); }
+    void MainWindow::Delete_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { InsertText(doc->Editor, L""); }); }
+    void MainWindow::SelectAll_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { Select(doc->Editor, 0, static_cast<int>(EditorText(doc->Editor).size())); }); }
+    void MainWindow::TimeDate_Click(IInspectable const&, RoutedEventArgs const&) { EditCurrentDocument([&](auto const& doc) { InsertText(doc->Editor, CurrentTimeDate()); }); }
+
+    void MainWindow::SetEncoding(TextEncoding encoding)
+    {
+        if (auto doc = CurrentDocument())
+        {
+            doc->Encoding = encoding;
             UpdateDocumentState(doc);
             UpdateStatusBar();
         }
     }
 
-    void MainWindow::LineEnding_Click(IInspectable const& sender, RoutedEventArgs const&)
+    void MainWindow::Utf8_Click(IInspectable const&, RoutedEventArgs const&) { SetEncoding(TextEncoding::Utf8); }
+    void MainWindow::Utf8Bom_Click(IInspectable const&, RoutedEventArgs const&) { SetEncoding(TextEncoding::Utf8Bom); }
+    void MainWindow::Utf16LE_Click(IInspectable const&, RoutedEventArgs const&) { SetEncoding(TextEncoding::Utf16LE); }
+    void MainWindow::Utf16BE_Click(IInspectable const&, RoutedEventArgs const&) { SetEncoding(TextEncoding::Utf16BE); }
+    void MainWindow::Ansi_Click(IInspectable const&, RoutedEventArgs const&) { SetEncoding(TextEncoding::Ansi); }
+
+    void MainWindow::SetLineEnding(LineEnding eol)
     {
         if (auto doc = CurrentDocument())
         {
-            doc->Eol = static_cast<LineEnding>(TagIndex(sender));
+            doc->Eol = eol;
             UpdateDocumentState(doc);
             UpdateStatusBar();
         }
     }
+
+    void MainWindow::Crlf_Click(IInspectable const&, RoutedEventArgs const&) { SetLineEnding(LineEnding::CRLF); }
+    void MainWindow::Lf_Click(IInspectable const&, RoutedEventArgs const&) { SetLineEnding(LineEnding::LF); }
+    void MainWindow::Cr_Click(IInspectable const&, RoutedEventArgs const&) { SetLineEnding(LineEnding::CR); }
 
     void MainWindow::InsertText(RichEditBox const& editor, std::wstring_view text)
     {
@@ -1742,10 +1746,18 @@ namespace winrt::MyNotepad::implementation
         LineEndingButton().Content(box_value(hstring{ textfile::LineEndingName(doc->Eol) }));
         EncodingButton().Content(box_value(hstring{ textfile::EncodingName(doc->Encoding) }));
         LanguageButton().Content(box_value(hstring{ syntax::LanguageName(doc->Language) }));
-        CheckRadioItem(LineEndingFlyout().Items(), static_cast<int>(doc->Eol));
-        CheckRadioItem(EncodingFlyout().Items(), static_cast<int>(doc->Encoding));
-        CheckRadioItem(LanguageFlyout().Items(), static_cast<int>(doc->Language));
-        CheckRadioItem(LanguageMenu().Items(), static_cast<int>(doc->Language));
+        CrlfItem().IsChecked(doc->Eol == LineEnding::CRLF);
+        LfItem().IsChecked(doc->Eol == LineEnding::LF);
+        CrItem().IsChecked(doc->Eol == LineEnding::CR);
+        Utf8Item().IsChecked(doc->Encoding == TextEncoding::Utf8);
+        Utf8BomItem().IsChecked(doc->Encoding == TextEncoding::Utf8Bom);
+        Utf16LEItem().IsChecked(doc->Encoding == TextEncoding::Utf16LE);
+        Utf16BEItem().IsChecked(doc->Encoding == TextEncoding::Utf16BE);
+        AnsiItem().IsChecked(doc->Encoding == TextEncoding::Ansi);
+        for (auto const& [item, language] : m_languageItems)
+        {
+            item.IsChecked(language == doc->Language);
+        }
         UpdateCaretPosition();
     }
 
@@ -2361,25 +2373,26 @@ namespace winrt::MyNotepad::implementation
 
     void MainWindow::BuildLanguageMenus()
     {
+        m_languageItems.clear();
         auto build = [this](Collections::IVector<MenuFlyoutItemBase> const& items, hstring const& group)
         {
             items.Clear();
-            for (int i = 0; i < syntax::LanguageCount(); ++i)
+            for (syntax::LanguageId language = 0; language < syntax::LanguageCount(); ++language)
             {
                 RadioMenuFlyoutItem item;
-                item.Text(syntax::LanguageName(i));
-                item.Tag(box_value(to_hstring(i)));
+                item.Text(syntax::LanguageName(language));
                 item.GroupName(group);
-                item.Click([this](IInspectable const& sender, RoutedEventArgs const&)
+                item.Click([this, language](auto&&, auto&&)
                 {
                     if (auto doc = CurrentDocument())
                     {
-                        SetLanguage(doc, TagIndex(sender));
+                        SetLanguage(doc, language);
                         FocusEditor(doc);
                     }
                 });
                 items.Append(item);
-                if (i == 0)
+                m_languageItems.emplace_back(item, language);
+                if (language == syntax::PlainText)
                 {
                     items.Append(MenuFlyoutSeparator{}); // plain text, then the languages
                 }
@@ -2389,17 +2402,16 @@ namespace winrt::MyNotepad::implementation
         build(LanguageFlyout().Items(), L"LanguageStatus");
 
         // Commands for people editing the definitions.
-        auto command = [this](wchar_t const* text, wchar_t const* tag)
+        auto command = [this](wchar_t const* text, std::function<void()> action)
         {
             MenuFlyoutItem item;
             item.Text(text);
-            item.Tag(box_value(tag));
-            item.Click({ this, &MainWindow::Command_Click });
+            item.Click([action](auto&&, auto&&) { action(); });
             LanguageMenu().Items().Append(item);
         };
         LanguageMenu().Items().Append(MenuFlyoutSeparator{});
-        command(L"Open language folder", L"OpenLanguageFolder");
-        command(L"Reload languages", L"ReloadLanguages");
+        command(L"Open language folder", [this] { OpenLanguageFolder(); });
+        command(L"Reload languages", [this] { ReloadLanguages(); });
     }
 
     void MainWindow::ReloadLanguages()

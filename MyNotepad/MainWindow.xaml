@@ -37,15 +37,15 @@
                 <Setter Property="Background" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
             </Style>
 
-            <!-- Right-click menu shared by all tabs. Items act on the tab that was right-clicked; the Tag names the command. -->
+            <!-- Right-click menu shared by all tabs. Items act on the tab that was right-clicked. -->
             <MenuFlyout x:Key="TabMenu" Opening="TabMenu_Opening">
-                <MenuFlyoutItem Text="Copy file name" Tag="TabCopyName" Click="TabMenu_Click" />
-                <MenuFlyoutItem Text="Copy full path" Tag="TabCopyPath" Click="TabMenu_Click" />
-                <MenuFlyoutItem Text="Open containing folder" Tag="TabOpenFolder" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Copy file name" x:Name="TabCopyNameItem" Click="TabCopyName_Click" />
+                <MenuFlyoutItem Text="Copy full path" x:Name="TabCopyPathItem" Click="TabCopyPath_Click" />
+                <MenuFlyoutItem Text="Open containing folder" x:Name="TabOpenFolderItem" Click="TabOpenFolder_Click" />
                 <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Close" Tag="TabClose" Click="TabMenu_Click" />
-                <MenuFlyoutItem Text="Close others" Tag="TabCloseOthers" Click="TabMenu_Click" />
-                <MenuFlyoutItem Text="Close tabs to the right" Tag="TabCloseRight" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Close" x:Name="TabCloseItem" Click="TabClose_Click" />
+                <MenuFlyoutItem Text="Close others" x:Name="TabCloseOthersItem" Click="TabCloseOthers_Click" />
+                <MenuFlyoutItem Text="Close tabs to the right" x:Name="TabCloseRightItem" Click="TabCloseRight_Click" />
             </MenuFlyout>
         </Grid.Resources>
 
@@ -96,28 +96,28 @@
 
             <MenuBar x:Name="MainMenu" Grid.Row="0">
                 <MenuBarItem Title="File">
-                    <MenuFlyoutItem Text="New tab" Tag="NewTab" Click="Command_Click">
+                    <MenuFlyoutItem Text="New tab" Click="NewTab_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="N" />
                             <KeyboardAccelerator Modifiers="Control" Key="T" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Open..." Tag="Open" Click="Command_Click">
+                    <MenuFlyoutItem Text="Open..." Click="Open_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="O" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Save" Tag="Save" Click="Command_Click">
+                    <MenuFlyoutItem Text="Save" Click="Save_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Save as..." Tag="SaveAs" Click="Command_Click">
+                    <MenuFlyoutItem Text="Save as..." Click="SaveAs_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Save all" Tag="SaveAll" Click="Command_Click">
+                    <MenuFlyoutItem Text="Save all" Click="SaveAll_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control,Menu" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -127,48 +127,48 @@
                     <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent files" />
                     <MenuFlyoutSeparator />
                     <!-- Ctrl+W / Ctrl+F4 are handled in RootGrid_PreviewKeyDown so the TabView doesn't also act on them. -->
-                    <MenuFlyoutItem Text="Close tab" Tag="CloseTab" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+W" />
-                    <MenuFlyoutItem Text="Exit" Tag="Exit" Click="Command_Click" />
+                    <MenuFlyoutItem Text="Close tab" Click="CloseTab_Click" KeyboardAcceleratorTextOverride="Ctrl+W" />
+                    <MenuFlyoutItem Text="Exit" Click="Exit_Click" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Edit">
                     <!-- The editor handles these shortcuts natively, so only the shortcut text is shown. -->
-                    <MenuFlyoutItem Text="Undo" Tag="Undo" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Z" />
-                    <MenuFlyoutItem Text="Redo" Tag="Redo" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Y" />
+                    <MenuFlyoutItem Text="Undo" Click="Undo_Click" KeyboardAcceleratorTextOverride="Ctrl+Z" />
+                    <MenuFlyoutItem Text="Redo" Click="Redo_Click" KeyboardAcceleratorTextOverride="Ctrl+Y" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Cut" Tag="Cut" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+X" />
-                    <MenuFlyoutItem Text="Copy" Tag="Copy" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+C" />
-                    <MenuFlyoutItem Text="Paste" Tag="Paste" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+V" />
-                    <MenuFlyoutItem Text="Delete" Tag="Delete" Click="Command_Click" KeyboardAcceleratorTextOverride="Del" />
+                    <MenuFlyoutItem Text="Cut" Click="Cut_Click" KeyboardAcceleratorTextOverride="Ctrl+X" />
+                    <MenuFlyoutItem Text="Copy" Click="Copy_Click" KeyboardAcceleratorTextOverride="Ctrl+C" />
+                    <MenuFlyoutItem Text="Paste" Click="Paste_Click" KeyboardAcceleratorTextOverride="Ctrl+V" />
+                    <MenuFlyoutItem Text="Delete" Click="Delete_Click" KeyboardAcceleratorTextOverride="Del" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Find" Tag="Find" Click="Command_Click">
+                    <MenuFlyoutItem Text="Find" Click="Find_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="F" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Find next" Tag="FindNext" Click="Command_Click">
+                    <MenuFlyoutItem Text="Find next" Click="FindNext_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Key="F3" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Find previous" Tag="FindPrevious" Click="Command_Click">
+                    <MenuFlyoutItem Text="Find previous" Click="FindPrevious_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Shift" Key="F3" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Replace" Tag="Replace" Click="Command_Click">
+                    <MenuFlyoutItem Text="Replace" Click="Replace_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="H" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
-                    <MenuFlyoutItem Text="Go to..." Tag="GoTo" Click="Command_Click">
+                    <MenuFlyoutItem Text="Go to..." Click="GoTo_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="G" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Select all" Tag="SelectAll" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+A" />
-                    <MenuFlyoutItem Text="Time/Date" Tag="TimeDate" Click="Command_Click">
+                    <MenuFlyoutItem Text="Select all" Click="SelectAll_Click" KeyboardAcceleratorTextOverride="Ctrl+A" />
+                    <MenuFlyoutItem Text="Time/Date" Click="TimeDate_Click">
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Key="F5" />
                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -176,8 +176,8 @@
                 </MenuBarItem>
 
                 <MenuBarItem Title="Format">
-                    <ToggleMenuFlyoutItem x:Name="WordWrapItem" Text="Word wrap" Tag="WordWrap" Click="Command_Click" />
-                    <MenuFlyoutItem Text="Font..." Tag="Font" Click="Command_Click" />
+                    <ToggleMenuFlyoutItem x:Name="WordWrapItem" Text="Word wrap" Click="WordWrap_Click" />
+                    <MenuFlyoutItem Text="Font..." Click="Font_Click" />
                     <!-- Items are added in code, one per language. -->
                     <MenuFlyoutSubItem x:Name="LanguageMenu" Text="Language" />
                     <!-- Tab key behaviour and tab width; items are added in code. -->
@@ -187,17 +187,17 @@
                 <MenuBarItem Title="View">
                     <MenuFlyoutSubItem Text="Zoom">
                         <!-- Accelerators for these are added in code (Ctrl+Plus/Minus need OEM key codes). -->
-                        <MenuFlyoutItem x:Name="ZoomInItem" Text="Zoom in" Tag="ZoomIn" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Plus" />
-                        <MenuFlyoutItem x:Name="ZoomOutItem" Text="Zoom out" Tag="ZoomOut" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Minus" />
-                        <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Tag="ZoomReset" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
+                        <MenuFlyoutItem x:Name="ZoomInItem" Text="Zoom in" Click="ZoomIn_Click" KeyboardAcceleratorTextOverride="Ctrl+Plus" />
+                        <MenuFlyoutItem x:Name="ZoomOutItem" Text="Zoom out" Click="ZoomOut_Click" KeyboardAcceleratorTextOverride="Ctrl+Minus" />
+                        <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Click="ZoomReset_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
                     </MenuFlyoutSubItem>
-                    <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Tag="StatusBar" Click="Command_Click" IsChecked="True" />
+                    <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True" />
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
-                    <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Tag="ShowWhitespace" Click="Command_Click" />
+                    <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Help">
-                    <MenuFlyoutItem Text="About MyNotepad" Tag="About" Click="Command_Click" />
+                    <MenuFlyoutItem Text="About MyNotepad" Click="About_Click" />
                 </MenuBarItem>
             </MenuBar>
 
@@ -216,15 +216,15 @@
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="FindBox" PlaceholderText="Find" KeyDown="FindBox_KeyDown" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                        <Button Tag="FindPrevious" Click="Command_Click" ToolTipService.ToolTip="Find previous (Shift+F3)">
+                        <Button Click="FindPrevious_Click" ToolTipService.ToolTip="Find previous (Shift+F3)">
                             <FontIcon Glyph="&#xE74A;" FontSize="14" />
                         </Button>
-                        <Button Tag="FindNext" Click="Command_Click" ToolTipService.ToolTip="Find next (F3)">
+                        <Button Click="FindNext_Click" ToolTipService.ToolTip="Find next (F3)">
                             <FontIcon Glyph="&#xE74B;" FontSize="14" />
                         </Button>
                         <CheckBox x:Name="MatchCaseCheck" Content="Match case" MinWidth="0" Margin="12,0,0,0" />
                         <CheckBox x:Name="WrapAroundCheck" Content="Wrap around" MinWidth="0" IsChecked="True" />
-                        <Button Tag="CloseFind" Click="Command_Click" ToolTipService.ToolTip="Close (Esc)">
+                        <Button Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)">
                             <FontIcon Glyph="&#xE711;" FontSize="14" />
                         </Button>
                     </StackPanel>
@@ -236,8 +236,8 @@
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="ReplaceBox" PlaceholderText="Replace with" KeyDown="ReplaceBox_KeyDown" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                        <Button Content="Replace" Tag="ReplaceOne" Click="Command_Click" />
-                        <Button Content="Replace all" Tag="ReplaceAll" Click="Command_Click" />
+                        <Button Content="Replace" Click="ReplaceOne_Click" />
+                        <Button Content="Replace all" Click="ReplaceAll_Click" />
                     </StackPanel>
                 </Grid>
             </StackPanel>
@@ -293,9 +293,9 @@
                     <Button x:Name="LineEndingButton" Style="{StaticResource StatusBarButtonStyle}" Content="Windows (CRLF)" ToolTipService.ToolTip="Line endings">
                         <Button.Flyout>
                             <MenuFlyout x:Name="LineEndingFlyout">
-                                <RadioMenuFlyoutItem Text="Windows (CRLF)" Tag="0" GroupName="LineEnding" Click="LineEnding_Click" />
-                                <RadioMenuFlyoutItem Text="Unix (LF)" Tag="1" GroupName="LineEnding" Click="LineEnding_Click" />
-                                <RadioMenuFlyoutItem Text="Macintosh (CR)" Tag="2" GroupName="LineEnding" Click="LineEnding_Click" />
+                                <RadioMenuFlyoutItem x:Name="CrlfItem" Text="Windows (CRLF)" GroupName="LineEnding" Click="Crlf_Click" />
+                                <RadioMenuFlyoutItem x:Name="LfItem" Text="Unix (LF)" GroupName="LineEnding" Click="Lf_Click" />
+                                <RadioMenuFlyoutItem x:Name="CrItem" Text="Macintosh (CR)" GroupName="LineEnding" Click="Cr_Click" />
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
@@ -303,11 +303,11 @@
                     <Button x:Name="EncodingButton" Style="{StaticResource StatusBarButtonStyle}" Content="UTF-8" ToolTipService.ToolTip="Encoding">
                         <Button.Flyout>
                             <MenuFlyout x:Name="EncodingFlyout">
-                                <RadioMenuFlyoutItem Text="UTF-8" Tag="0" GroupName="Encoding" Click="Encoding_Click" />
-                                <RadioMenuFlyoutItem Text="UTF-8 with BOM" Tag="1" GroupName="Encoding" Click="Encoding_Click" />
-                                <RadioMenuFlyoutItem Text="UTF-16 LE" Tag="2" GroupName="Encoding" Click="Encoding_Click" />
-                                <RadioMenuFlyoutItem Text="UTF-16 BE" Tag="3" GroupName="Encoding" Click="Encoding_Click" />
-                                <RadioMenuFlyoutItem Text="ANSI" Tag="4" GroupName="Encoding" Click="Encoding_Click" />
+                                <RadioMenuFlyoutItem x:Name="Utf8Item" Text="UTF-8" GroupName="Encoding" Click="Utf8_Click" />
+                                <RadioMenuFlyoutItem x:Name="Utf8BomItem" Text="UTF-8 with BOM" GroupName="Encoding" Click="Utf8Bom_Click" />
+                                <RadioMenuFlyoutItem x:Name="Utf16LEItem" Text="UTF-16 LE" GroupName="Encoding" Click="Utf16LE_Click" />
+                                <RadioMenuFlyoutItem x:Name="Utf16BEItem" Text="UTF-16 BE" GroupName="Encoding" Click="Utf16BE_Click" />
+                                <RadioMenuFlyoutItem x:Name="AnsiItem" Text="ANSI" GroupName="Encoding" Click="Ansi_Click" />
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
