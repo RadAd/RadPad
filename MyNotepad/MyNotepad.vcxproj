@@ -103,6 +103,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
+    <ResourceCompile Include="MyNotepad.rc" />
+    <Image Include="MyNotepad.ico" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

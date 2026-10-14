@@ -27,6 +27,8 @@ The app is **unpackaged and self-contained**: the Windows App SDK runtime ships 
 | `MainWindow.xaml` / `.h` / `.cpp` | UI, tabs, commands, find/replace, dialogs |
 | `TextFile.h` / `.cpp` | File loading and saving, encoding and line-ending handling |
 | `Syntax.h` / `.cpp` | Language detection and the tokenizer behind syntax highlighting |
+| `MyNotepad.ico` / `MyNotepad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
+| `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco MyNotepad/MyNotepad.ico` after changing it |
 
 ## How highlighting works
 Each tab's editor is a `RichEditBox` used as a plain-text editor. After each edit, `Syntax.cpp` tokenizes the whole document, then `MainWindow` recolours only the characters whose colour changed, and only in and near the visible part of the document. More is coloured as you scroll. Colouring a range is slow in RichEdit, so this keeps typing and opening large files responsive.

@@ -483,6 +483,23 @@ namespace winrt::MyNotepad::implementation
         titleBar.ButtonInactiveBackgroundColor(Colors::Transparent());
 
         UINT dpi = GetDpiForWindow(WindowHandle());
+
+        // The app icon from MyNotepad.rc, for Alt+Tab and the taskbar. The small icon is loaded separately
+        // so the 16-24 px artwork is used rather than a shrunken large icon.
+        auto loadIcon = [dpi](int metric)
+        {
+            int size = GetSystemMetricsForDpi(metric, dpi);
+            return static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1), IMAGE_ICON, size, size, LR_SHARED));
+        };
+        if (auto icon = loadIcon(SM_CXICON))
+        {
+            appWindow.SetIcon(GetIconIdFromIcon(icon));
+        }
+        if (auto smallIcon = loadIcon(SM_CXSMICON))
+        {
+            SendMessageW(WindowHandle(), WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+        }
+
         appWindow.Resize({ MulDiv(1100, dpi, 96), MulDiv(760, dpi, 96) });
 
         appWindow.Closing([this](auto&&, AppWindowClosingEventArgs const& args) { OnAppWindowClosing(args); });

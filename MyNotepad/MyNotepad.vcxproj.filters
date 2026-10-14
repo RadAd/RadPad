@@ -20,6 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
+    <ResourceCompile Include="MyNotepad.rc" />
+    <Image Include="MyNotepad.ico" />
     <None Include="packages.config" />
   </ItemGroup>
 </Project>
