@@ -1,24 +1,50 @@
 #pragma once
 
 #include "MainWindow.g.h"
+#include "Syntax.h"
 #include "TextFile.h"
 
 namespace winrt::MyNotepad::implementation
 {
-    // State for one open tab. The editor TextBox stores line breaks as '\r'.
+    // One undoable edit: at Start, Removed was replaced by Inserted.
+    struct UndoRecord
+    {
+        size_t Start{ 0 };
+        std::wstring Removed;
+        std::wstring Inserted;
+    };
+
+    // State for one open tab. The editor stores line breaks as '\r'.
     struct Document
     {
         Microsoft::UI::Xaml::Controls::TabViewItem Tab{ nullptr };
-        Microsoft::UI::Xaml::Controls::TextBox Editor{ nullptr };
+        Microsoft::UI::Xaml::Controls::RichEditBox Editor{ nullptr };
         std::wstring Path;      // empty for an untitled document
         std::wstring SavedText; // editor text as of the last load/save, used for dirty tracking
         textfile::TextEncoding Encoding{ textfile::TextEncoding::Utf8 };
         textfile::TextEncoding SavedEncoding{ textfile::TextEncoding::Utf8 };
         textfile::LineEnding Eol{ textfile::LineEnding::CRLF };
         textfile::LineEnding SavedEol{ textfile::LineEnding::CRLF };
+        syntax::Language Language{ syntax::Language::PlainText };
+        std::wstring HighlightedText;               // editor text when highlighting was last updated
+        std::vector<syntax::TokenKind> AppliedKinds; // colour currently applied to each character of HighlightedText
+        std::vector<syntax::TokenKind> DesiredKinds; // the tokenizer's colour for each character of HighlightedText
+        int SelectionStart{ 0 };                     // last known selection
+        int SelectionEnd{ 0 };
+        int EditStart{ 0 };                          // selection when the pending edit began, i.e. the text it replaced
+        int EditEnd{ 0 };
+        // Undo history of text edits. RichEditBox's own undo is turned off because it also records
+        // formatting changes, so Ctrl+Z would undo the highlighting.
+        std::vector<UndoRecord> UndoStack;
+        std::vector<UndoRecord> RedoStack;
+        bool ApplyingUndo{ false };
+        bool StartNewUndoRecord{ true };
         std::wstring Header;
         bool IsDirty{ false };
         bool IsClosing{ false };
+        bool RefreshPending{ false };
+        bool RepaintPending{ false };
+        Microsoft::UI::Xaml::Controls::ScrollViewer ScrollViewer{ nullptr }; // inside the editor's template
 
         std::wstring DisplayName() const;
     };
@@ -58,6 +84,19 @@ namespace winrt::MyNotepad::implementation
         void SelectTabAt(int index);
         void OnCurrentDocumentChanged();
         void FocusEditor(std::shared_ptr<Document> const& doc);
+        void ScheduleRefresh(std::shared_ptr<Document> const& doc);
+
+        // Syntax highlighting
+        void UpdateHighlighting(std::shared_ptr<Document> const& doc, bool recolorAll);
+        void PaintVisibleText(std::shared_ptr<Document> const& doc);
+        void ScheduleRepaint(std::shared_ptr<Document> const& doc);
+
+        // Undo
+        void RecordEdit(std::shared_ptr<Document> const& doc, size_t start, std::wstring removed, std::wstring inserted);
+        void UndoOrRedo(std::shared_ptr<Document> const& doc, bool redo);
+        void ClearUndoHistory(std::shared_ptr<Document> const& doc);
+        void SetLanguage(std::shared_ptr<Document> const& doc, syntax::Language language);
+        void BuildLanguageMenus();
 
         // Window lifetime
         void OnAppWindowClosing(Microsoft::UI::Windowing::AppWindowClosingEventArgs const& args);
@@ -70,11 +109,14 @@ namespace winrt::MyNotepad::implementation
         void UpdateTitle();
         void UpdateStatusBar();
         void UpdateCaretPosition();
-        void ApplyEditorSettings(Microsoft::UI::Xaml::Controls::TextBox const& editor);
+        void ApplyEditorSettings(std::shared_ptr<Document> const& doc);
+        void ApplyFont(Microsoft::UI::Text::ITextCharacterFormat const& format);
+        bool IsDarkTheme();
         void ApplyEditorSettingsToAll();
         void SetZoom(int zoom);
         void AddZoomAccelerators();
-        void InsertText(Microsoft::UI::Xaml::Controls::TextBox const& editor, std::wstring_view text);
+        void InsertText(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, std::wstring_view text);
+        fire_and_forget PasteAsync(std::weak_ptr<Document> weakDoc);
 
         // Find and replace
         void ShowFindPanel(bool showReplace);

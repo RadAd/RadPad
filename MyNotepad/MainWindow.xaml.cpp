@@ -15,6 +15,12 @@ using namespace winrt::Windows::ApplicationModel::DataTransfer;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Storage;
 using namespace winrt::Windows::System;
+using winrt::Microsoft::UI::Text::ITextCharacterFormat;
+using winrt::Microsoft::UI::Text::PointOptions;
+using winrt::Microsoft::UI::Text::RichEditTextDocument;
+using winrt::Microsoft::UI::Text::TextGetOptions;
+using winrt::Microsoft::UI::Text::TextSetOptions;
+using syntax::TokenKind;
 using textfile::LineEnding;
 using textfile::TextEncoding;
 
@@ -80,7 +86,128 @@ namespace
         return std::wstring(time) + L" " + date;
     }
 
-    // Line and column (both 1-based) of a character index. TextBox text uses '\r' for every line break.
+    // The editor's text. RichEditBox always ends its text with a paragraph mark that isn't part of the document.
+    std::wstring EditorText(RichEditBox const& editor)
+    {
+        hstring text;
+        editor.Document().GetText(TextGetOptions::None, text);
+        std::wstring result{ text };
+        if (!result.empty() && result.back() == L'\r')
+        {
+            result.pop_back();
+        }
+        return result;
+    }
+
+    int SelectionStart(RichEditBox const& editor)
+    {
+        return editor.Document().Selection().StartPosition();
+    }
+
+    int SelectionLength(RichEditBox const& editor)
+    {
+        auto selection = editor.Document().Selection();
+        return selection.EndPosition() - selection.StartPosition();
+    }
+
+    std::wstring SelectedText(RichEditBox const& editor)
+    {
+        hstring text;
+        editor.Document().Selection().GetText(TextGetOptions::None, text);
+        return std::wstring{ text };
+    }
+
+    void Select(RichEditBox const& editor, int start, int length)
+    {
+        editor.Document().Selection().SetRange(start, start + length);
+    }
+
+    void ScrollToSelection(RichEditBox const& editor)
+    {
+        editor.Document().Selection().ScrollIntoView(PointOptions::None);
+    }
+
+    // Copies as plain text with CRLF line breaks, whatever the selection's formatting.
+    void CopySelection(RichEditBox const& editor)
+    {
+        hstring text;
+        editor.Document().Selection().GetText(TextGetOptions::UseCrlf, text);
+        if (!text.empty())
+        {
+            DataPackage package;
+            package.SetText(text);
+            Clipboard::SetContent(package);
+        }
+    }
+
+    // Batches formatting changes so the editor redraws once at the end.
+    class FormattingScope
+    {
+    public:
+        explicit FormattingScope(RichEditTextDocument const& document) : m_document(document)
+        {
+            m_document.BatchDisplayUpdates();
+        }
+
+        ~FormattingScope()
+        {
+            m_document.ApplyDisplayUpdates();
+        }
+
+        FormattingScope(FormattingScope const&) = delete;
+        FormattingScope& operator=(FormattingScope const&) = delete;
+
+    private:
+        RichEditTextDocument m_document;
+    };
+
+    ScrollViewer FindScrollViewer(DependencyObject const& root)
+    {
+        for (int i = 0, count = VisualTreeHelper::GetChildrenCount(root); i < count; ++i)
+        {
+            auto child = VisualTreeHelper::GetChild(root, i);
+            if (auto viewer = child.try_as<ScrollViewer>())
+            {
+                return viewer;
+            }
+            if (auto viewer = FindScrollViewer(child))
+            {
+                return viewer;
+            }
+        }
+        return nullptr;
+    }
+
+    bool IsSpace(wchar_t c)
+    {
+        return c == L' ' || c == L'\t' || c == L'\r';
+    }
+
+    // Visual Studio-like colours for each TokenKind, as 0xRRGGBB.
+    Windows::UI::Color TokenColor(TokenKind kind, bool dark)
+    {
+        static constexpr uint32_t lightColors[] = { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5 };
+        static constexpr uint32_t darkColors[] = { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE };
+        static_assert(std::size(lightColors) == static_cast<size_t>(TokenKind::Unknown) && std::size(darkColors) == std::size(lightColors));
+
+        auto index = static_cast<size_t>(kind);
+        uint32_t rgb = (dark ? darkColors : lightColors)[index < std::size(lightColors) ? index : 0];
+        return { 0xFF, static_cast<uint8_t>(rgb >> 16), static_cast<uint8_t>(rgb >> 8), static_cast<uint8_t>(rgb) };
+    }
+
+    // Checks the radio item whose Tag is index.
+    void CheckRadioItem(Collections::IVector<MenuFlyoutItemBase> const& items, int index)
+    {
+        for (auto const& item : items)
+        {
+            if (auto radio = item.try_as<RadioMenuFlyoutItem>())
+            {
+                radio.IsChecked(TagIndex(radio) == index);
+            }
+        }
+    }
+
+    // Line and column (both 1-based) of a character index. Editor text uses '\r' for every line break.
     std::pair<int, int> LineColumnAt(std::wstring_view text, int index)
     {
         int line = 1;
@@ -322,8 +449,19 @@ namespace winrt::MyNotepad::implementation
         StatusBarItem().IsChecked(m_statusBarVisible);
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
         AddZoomAccelerators();
+        BuildLanguageMenus();
 
-        // handledEventsToo: the TextBox handles drag events itself, but we still want file drops anywhere.
+        // Syntax colours differ between light and dark themes.
+        RootGrid().ActualThemeChanged([this](auto&&, auto&&)
+        {
+            for (auto const& doc : m_documents)
+            {
+                ApplyEditorSettings(doc);
+                UpdateHighlighting(doc, true);
+            }
+        });
+
+        // handledEventsToo: the editor handles drag events itself, but we still want file drops anywhere.
         RootGrid().AddHandler(UIElement::DragOverEvent(), box_value(DragEventHandler{ this, &MainWindow::OnDragOver }), true);
         RootGrid().AddHandler(UIElement::DropEvent(), box_value(DragEventHandler{ [this](IInspectable const&, DragEventArgs const& e) { OnDropAsync(e); } }), true);
     }
@@ -410,10 +548,14 @@ namespace winrt::MyNotepad::implementation
         auto doc = std::make_shared<Document>();
         std::weak_ptr<Document> weakDoc = doc;
 
-        TextBox editor;
-        editor.AcceptsReturn(true);
+        // A RichEditBox rather than a TextBox so that text can be coloured. It's used as a plain-text
+        // editor: the highlighter owns all formatting, and text is copied and pasted as plain text.
+        RichEditBox editor;
         editor.IsSpellCheckEnabled(false);
         editor.IsTextPredictionEnabled(false);
+        editor.ClipboardCopyFormat(RichEditClipboardFormat::PlainText);
+        editor.DisabledFormattingAccelerators(DisabledFormattingAccelerators::All);
+        editor.Document().UndoLimit(0); // see Document::UndoStack
         editor.BorderThickness(Thickness{ 0, 0, 0, 0 });
         editor.CornerRadius(Microsoft::UI::Xaml::CornerRadius{ 0, 0, 0, 0 });
         editor.Padding(Thickness{ 12, 8, 12, 8 });
@@ -427,33 +569,120 @@ namespace winrt::MyNotepad::implementation
             color.A = 0x80;
             editor.SelectionHighlightColorWhenNotFocused(SolidColorBrush{ color });
         }
-        ApplyEditorSettings(editor);
+        doc->Editor = editor;
+        ApplyEditorSettings(doc);
 
-        editor.TextChanged([this, weakDoc](auto&&, auto&&)
+        editor.TextChanging([this, weakDoc](RichEditBox const&, RichEditBoxTextChangingEventArgs const& e)
+        {
+            // Formatting changes, including our own highlighting, raise this event too; only react to edits.
+            if (auto d = weakDoc.lock(); d && e.IsContentChanging())
+            {
+                if (!d->RefreshPending)
+                {
+                    // The selection hasn't been updated for this edit yet, so it's the text being replaced.
+                    d->EditStart = d->SelectionStart;
+                    d->EditEnd = d->SelectionEnd;
+                }
+                ScheduleRefresh(d);
+            }
+        });
+        editor.SelectionChanged([this, weakDoc](auto&&, auto&&)
         {
             if (auto d = weakDoc.lock())
             {
-                UpdateDocumentState(d);
+                auto selection = d->Editor.Document().Selection();
+                d->SelectionStart = selection.StartPosition();
+                d->SelectionEnd = selection.EndPosition();
                 if (d == CurrentDocument())
                 {
                     UpdateCaretPosition();
                 }
             }
         });
-        editor.SelectionChanged([this, weakDoc](auto&&, auto&&)
+        // Only visible text is coloured, so colour more when the view moves or grows. The editor's
+        // ScrollViewer only exists once its template is applied, which doesn't happen while the
+        // editor is collapsed, so look for it whenever the editor is resized (including when shown).
+        editor.SizeChanged([this, weakDoc](IInspectable const& sender, auto&&)
         {
-            if (auto d = weakDoc.lock(); d && d == CurrentDocument())
+            auto d = weakDoc.lock();
+            if (!d)
             {
-                UpdateCaretPosition();
+                return;
             }
-        });
-        editor.PreviewKeyDown([this](IInspectable const& sender, KeyRoutedEventArgs const& e)
-        {
-            // TextBox has no AcceptsTab; insert tabs ourselves instead of moving focus.
-            if (e.Key() == VirtualKey::Tab && !IsKeyDown(VK_CONTROL) && !IsKeyDown(VK_SHIFT) && !IsKeyDown(VK_MENU))
+            if (!d->ScrollViewer)
             {
-                InsertText(sender.as<TextBox>(), L"\t");
+                if (auto viewer = FindScrollViewer(sender.as<DependencyObject>()))
+                {
+                    d->ScrollViewer = viewer;
+                    viewer.ViewChanged([this, weakDoc](auto&&, auto&&)
+                    {
+                        if (auto scrolled = weakDoc.lock())
+                        {
+                            ScheduleRepaint(scrolled);
+                        }
+                    });
+                }
+            }
+            ScheduleRepaint(d);
+        });
+        editor.Paste([this, weakDoc](IInspectable const&, TextControlPasteEventArgs const& e)
+        {
+            // Paste without the source's formatting.
+            e.Handled(true);
+            PasteAsync(weakDoc);
+        });
+        editor.PreviewKeyDown([this, weakDoc](IInspectable const& sender, KeyRoutedEventArgs const& e)
+        {
+            bool ctrl = IsKeyDown(VK_CONTROL);
+            bool shift = IsKeyDown(VK_SHIFT);
+            bool alt = IsKeyDown(VK_MENU);
+            int key = static_cast<int>(e.Key());
+            auto d = weakDoc.lock();
+
+            // Insert tabs ourselves instead of letting Tab move focus.
+            if (key == VK_TAB && !ctrl && !shift && !alt)
+            {
+                InsertText(sender.as<RichEditBox>(), L"\t");
                 e.Handled(true);
+                return;
+            }
+            // Undo and redo use our own history (see Document::UndoStack).
+            bool undo = (ctrl && !alt && key == 'Z') || (alt && !ctrl && !shift && key == VK_BACK);
+            bool redo = ctrl && !alt && (key == 'Y' || (shift && key == 'Z'));
+            if (d && (undo || redo))
+            {
+                UndoOrRedo(d, redo);
+                e.Handled(true);
+                return;
+            }
+            if (!ctrl || alt)
+            {
+                return;
+            }
+
+            switch (key)
+            {
+            case 'E': case 'J': case 'L': case 'R': case VK_OEM_4: case VK_OEM_6: case VK_OEM_COMMA: case VK_OEM_PERIOD:
+                // RichEditBox shortcuts for alignment, lists and font size don't apply to plain text.
+                e.Handled(true);
+                break;
+            case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
+                // Ctrl+Left Shift / Ctrl+Right Shift switch the paragraph's reading direction.
+                e.Handled(true);
+                break;
+            case 'A':
+                // Ctrl+Shift+A is all caps; Ctrl+A (select all) is left alone.
+                e.Handled(shift);
+                break;
+            case VK_OEM_PLUS: case VK_ADD:
+                // Handled here because RichEditBox uses Ctrl+= for subscript.
+                SetZoom(m_zoom + ZoomStep);
+                e.Handled(true);
+                break;
+            case VK_OEM_MINUS: case VK_SUBTRACT:
+                SetZoom(m_zoom - ZoomStep);
+                e.Handled(true);
+                break;
             }
         });
         editor.AddHandler(UIElement::PointerWheelChangedEvent(), box_value(PointerEventHandler{ [this](IInspectable const& sender, PointerRoutedEventArgs const& e)
@@ -471,7 +700,6 @@ namespace winrt::MyNotepad::implementation
         icon.Glyph(L"");
         tab.IconSource(icon);
 
-        doc->Editor = editor;
         doc->Tab = tab;
         m_documents.push_back(doc);
         EditorHost().Children().Append(editor);
@@ -524,7 +752,7 @@ namespace winrt::MyNotepad::implementation
 
         // Reuse the current tab if it's an untouched blank document, as Notepad does.
         auto doc = CurrentDocument();
-        if (!doc || !doc->Path.empty() || doc->IsDirty || !doc->Editor.Text().empty())
+        if (!doc || !doc->Path.empty() || doc->IsDirty || !EditorText(doc->Editor).empty())
         {
             doc = CreateDocument();
         }
@@ -532,10 +760,12 @@ namespace winrt::MyNotepad::implementation
         doc->Path = fullPath;
         doc->Encoding = doc->SavedEncoding = loaded.Encoding;
         doc->Eol = doc->SavedEol = loaded.Eol;
-        doc->Editor.Text(loaded.Text);
-        doc->SavedText = doc->Editor.Text();
-        doc->Editor.Select(0, 0);
-        doc->Editor.ClearUndoRedoHistory();
+        doc->Language = syntax::LanguageFromPath(fullPath);
+        doc->Editor.Document().SetText(TextSetOptions::None, loaded.Text);
+        doc->SavedText = EditorText(doc->Editor);
+        Select(doc->Editor, 0, 0);
+        UpdateHighlighting(doc, true);
+        ClearUndoHistory(doc);
         UpdateDocumentState(doc);
         if (doc == CurrentDocument())
         {
@@ -584,7 +814,7 @@ namespace winrt::MyNotepad::implementation
             }
         }
 
-        hstring text = doc->Editor.Text();
+        std::wstring text = EditorText(doc->Editor);
         try
         {
             textfile::Save(path, text, encoding, doc->Eol);
@@ -595,11 +825,18 @@ namespace winrt::MyNotepad::implementation
             return false;
         }
 
+        bool pathChanged = !PathsEqual(path, doc->Path);
         doc->Path = path;
         doc->Encoding = doc->SavedEncoding = encoding;
         doc->SavedEol = doc->Eol;
-        doc->SavedText = text;
+        doc->SavedText = std::move(text);
         UpdateDocumentState(doc);
+
+        // Saving under a new name switches to its extension's language, unless that would turn highlighting off.
+        if (auto language = syntax::LanguageFromPath(path); pathChanged && language != syntax::Language::PlainText && language != doc->Language)
+        {
+            SetLanguage(doc, language);
+        }
         if (doc == CurrentDocument())
         {
             UpdateStatusBar();
@@ -841,13 +1078,13 @@ namespace winrt::MyNotepad::implementation
         if (command == L"SaveAs") { SaveDocument(doc, true); return; }
         if (command == L"CloseTab") { CloseDocumentAsync(doc); return; }
 
-        if (command == L"Undo") { editor.Undo(); }
-        else if (command == L"Redo") { editor.Redo(); }
-        else if (command == L"Cut") { editor.CutSelectionToClipboard(); }
-        else if (command == L"Copy") { editor.CopySelectionToClipboard(); }
-        else if (command == L"Paste") { editor.PasteFromClipboard(); }
-        else if (command == L"Delete") { if (editor.SelectionLength() > 0) { editor.SelectedText(L""); } }
-        else if (command == L"SelectAll") { editor.SelectAll(); }
+        if (command == L"Undo") { UndoOrRedo(doc, false); }
+        else if (command == L"Redo") { UndoOrRedo(doc, true); }
+        else if (command == L"Cut") { CopySelection(editor); InsertText(editor, L""); }
+        else if (command == L"Copy") { CopySelection(editor); }
+        else if (command == L"Paste") { PasteAsync(doc); }
+        else if (command == L"Delete") { InsertText(editor, L""); }
+        else if (command == L"SelectAll") { Select(editor, 0, static_cast<int>(EditorText(editor).size())); }
         else if (command == L"TimeDate") { InsertText(editor, CurrentTimeDate()); }
         FocusEditor(doc);
     }
@@ -872,12 +1109,41 @@ namespace winrt::MyNotepad::implementation
         }
     }
 
-    void MainWindow::InsertText(TextBox const& editor, std::wstring_view text)
+    void MainWindow::InsertText(RichEditBox const& editor, std::wstring_view text)
     {
-        // Replacing SelectedText keeps the change on the TextBox undo stack.
-        int start = editor.SelectionStart();
-        editor.SelectedText(text);
-        editor.Select(start + static_cast<int>(text.size()), 0);
+        // Replaces the selection and leaves the caret after the new text.
+        auto selection = editor.Document().Selection();
+        if (selection.Length() != 0 || !text.empty())
+        {
+            selection.SetText(TextSetOptions::None, text);
+            selection.Collapse(false);
+        }
+    }
+
+    fire_and_forget MainWindow::PasteAsync(std::weak_ptr<Document> weakDoc)
+    {
+        // Reads the clipboard ourselves rather than letting RichEditBox paste, so only plain text arrives.
+        auto strong = get_strong();
+        hstring text;
+        try
+        {
+            auto content = Clipboard::GetContent();
+            if (!content.Contains(StandardDataFormats::Text()))
+            {
+                co_return;
+            }
+            text = co_await content.GetTextAsync();
+        }
+        catch (hresult_error const&)
+        {
+            co_return; // the clipboard is busy or its contents can't be read
+        }
+
+        if (auto doc = weakDoc.lock())
+        {
+            InsertText(doc->Editor, textfile::NormalizeLineBreaks(text));
+            ScrollToSelection(doc->Editor);
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -886,8 +1152,7 @@ namespace winrt::MyNotepad::implementation
 
     void MainWindow::UpdateDocumentState(std::shared_ptr<Document> const& doc)
     {
-        hstring text = doc->Editor.Text();
-        doc->IsDirty = std::wstring_view{ text } != doc->SavedText || doc->Encoding != doc->SavedEncoding || doc->Eol != doc->SavedEol;
+        doc->IsDirty = EditorText(doc->Editor) != doc->SavedText || doc->Encoding != doc->SavedEncoding || doc->Eol != doc->SavedEol;
 
         auto name = doc->DisplayName();
         auto header = doc->IsDirty ? name + L" •" : name;
@@ -925,20 +1190,11 @@ namespace winrt::MyNotepad::implementation
 
         LineEndingButton().Content(box_value(hstring{ textfile::LineEndingName(doc->Eol) }));
         EncodingButton().Content(box_value(hstring{ textfile::EncodingName(doc->Encoding) }));
-        for (auto const& item : LineEndingFlyout().Items())
-        {
-            if (auto radio = item.try_as<RadioMenuFlyoutItem>())
-            {
-                radio.IsChecked(TagIndex(radio) == static_cast<int>(doc->Eol));
-            }
-        }
-        for (auto const& item : EncodingFlyout().Items())
-        {
-            if (auto radio = item.try_as<RadioMenuFlyoutItem>())
-            {
-                radio.IsChecked(TagIndex(radio) == static_cast<int>(doc->Encoding));
-            }
-        }
+        LanguageButton().Content(box_value(hstring{ syntax::LanguageName(doc->Language) }));
+        CheckRadioItem(LineEndingFlyout().Items(), static_cast<int>(doc->Eol));
+        CheckRadioItem(EncodingFlyout().Items(), static_cast<int>(doc->Encoding));
+        CheckRadioItem(LanguageFlyout().Items(), static_cast<int>(doc->Language));
+        CheckRadioItem(LanguageMenu().Items(), static_cast<int>(doc->Language));
         UpdateCaretPosition();
     }
 
@@ -950,31 +1206,379 @@ namespace winrt::MyNotepad::implementation
             return;
         }
 
-        hstring text = doc->Editor.Text();
-        auto [line, column] = LineColumnAt(text, doc->Editor.SelectionStart());
+        auto text = EditorText(doc->Editor);
+        auto [line, column] = LineColumnAt(text, SelectionStart(doc->Editor));
         CaretPositionText().Text(std::format(L"Ln {}, Col {}", line, column));
 
-        int selected = doc->Editor.SelectionLength();
+        // A selection can include the final paragraph mark, which isn't part of the text.
+        size_t selected = std::min(static_cast<size_t>(std::max(SelectionLength(doc->Editor), 0)), text.size());
         CharacterCountText().Text(selected > 0
             ? std::format(L"{} of {} characters", selected, text.size())
             : std::format(L"{} characters", text.size()));
     }
 
-    void MainWindow::ApplyEditorSettings(TextBox const& editor)
+    void MainWindow::ApplyFont(ITextCharacterFormat const& format)
     {
+        // Bold and italic are left to the control's FontWeight and FontStyle: setting them on a range
+        // takes RichEdit around 70µs per character, against milliseconds for the control properties.
+        format.Name(m_fontFamily);
+        format.Size(static_cast<float>(m_fontPoints * m_zoom / 100.0));
+    }
+
+    void MainWindow::ApplyEditorSettings(std::shared_ptr<Document> const& doc)
+    {
+        auto editor = doc->Editor;
         editor.FontFamily(Media::FontFamily{ m_fontFamily });
         editor.FontSize(m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0);
         editor.FontWeight(m_fontBold ? Microsoft::UI::Text::FontWeights::Bold() : Microsoft::UI::Text::FontWeights::Normal());
         editor.FontStyle(m_fontItalic ? Windows::UI::Text::FontStyle::Italic : Windows::UI::Text::FontStyle::Normal);
         editor.TextWrapping(m_wordWrap ? TextWrapping::Wrap : TextWrapping::NoWrap);
+
+        // Set the font name and size on the existing text and on the default format for new text too,
+        // since text that has been coloured carries its own character formatting.
+        auto document = editor.Document();
+        FormattingScope scope{ document };
+        auto defaultFormat = document.GetDefaultCharacterFormat();
+        ApplyFont(defaultFormat);
+        defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain, IsDarkTheme()));
+        document.SetDefaultCharacterFormat(defaultFormat);
+        ApplyFont(document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).CharacterFormat());
+        ScheduleRepaint(doc); // a font or zoom change can bring more text into view
     }
 
     void MainWindow::ApplyEditorSettingsToAll()
     {
         for (auto const& doc : m_documents)
         {
-            ApplyEditorSettings(doc->Editor);
+            ApplyEditorSettings(doc);
         }
+    }
+
+    bool MainWindow::IsDarkTheme()
+    {
+        return RootGrid().ActualTheme() == ElementTheme::Dark;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Syntax highlighting
+    // ---------------------------------------------------------------------------------------------
+
+    void MainWindow::ScheduleRefresh(std::shared_ptr<Document> const& doc)
+    {
+        // Several edits in a row (fast typing, IME input) are handled together once the dispatcher is idle.
+        if (doc->RefreshPending)
+        {
+            return;
+        }
+        doc->RefreshPending = true;
+        DispatcherQueue().TryEnqueue([this, strong = get_strong(), weakDoc = std::weak_ptr<Document>(doc)]
+        {
+            auto d = weakDoc.lock();
+            if (!d || std::find(m_documents.begin(), m_documents.end(), d) == m_documents.end())
+            {
+                return;
+            }
+            d->RefreshPending = false;
+            UpdateHighlighting(d, false);
+            UpdateDocumentState(d);
+            if (d == CurrentDocument())
+            {
+                UpdateCaretPosition();
+            }
+        });
+    }
+
+    void MainWindow::UpdateHighlighting(std::shared_ptr<Document> const& doc, bool recolorAll)
+    {
+        std::wstring text = EditorText(doc->Editor);
+        auto& applied = doc->AppliedKinds;
+        auto const& old = doc->HighlightedText;
+
+        if (text != old)
+        {
+            // The edit is the part between the common prefix and suffix of the old and new text.
+            size_t prefix = std::mismatch(old.begin(), old.end(), text.begin(), text.end()).first - old.begin();
+            size_t suffix = 0;
+            size_t maxSuffix = std::min(old.size(), text.size()) - prefix;
+            while (suffix < maxSuffix && old[old.size() - 1 - suffix] == text[text.size() - 1 - suffix])
+            {
+                ++suffix;
+            }
+            if (!doc->ApplyingUndo)
+            {
+                RecordEdit(doc, prefix, old.substr(prefix, old.size() - prefix - suffix), text.substr(prefix, text.size() - prefix - suffix));
+            }
+            if (recolorAll)
+            {
+                // Don't bother working out which colours survived.
+                suffix = prefix = 0;
+            }
+
+            // Formatting moves with the text, so the colours before and after the edit are still in place.
+            // The edited span is widened to cover the replaced selection, because replaced text all takes
+            // on one format, even where the new text happens to match the old.
+            auto delta = static_cast<ptrdiff_t>(text.size()) - static_cast<ptrdiff_t>(old.size());
+            auto editStart = static_cast<size_t>(std::clamp<ptrdiff_t>(std::min(doc->EditStart, doc->EditEnd), 0, static_cast<ptrdiff_t>(text.size())));
+            auto editEnd = static_cast<size_t>(std::clamp<ptrdiff_t>(std::max(doc->EditStart, doc->EditEnd) + delta, 0, static_cast<ptrdiff_t>(text.size())));
+            size_t changedStart = std::min(prefix, editStart);
+            size_t changedEnd = std::max(text.size() - suffix, editEnd);
+            size_t keptBefore = changedStart;            // leading characters whose colour is known
+            size_t keptAfter = text.size() - changedEnd; // trailing characters whose colour is known
+
+            std::vector<TokenKind> rebased(text.size(), TokenKind::Unknown);
+            std::copy_n(applied.begin(), keptBefore, rebased.begin());
+            std::copy(applied.end() - keptAfter, applied.end(), rebased.end() - keptAfter);
+            applied = std::move(rebased);
+        }
+        else if (recolorAll)
+        {
+            applied.assign(text.size(), TokenKind::Unknown);
+        }
+
+        syntax::Classify(doc->Language, text, doc->DesiredKinds);
+        doc->HighlightedText = std::move(text);
+
+        // New text gets the editor font and the plain colour, removing any formatting it came with.
+        // This is one call per span of new text, so it's cheap even for a whole file.
+        auto document = doc->Editor.Document();
+        std::optional<FormattingScope> scope; // only opened if something needs painting
+        for (size_t i = 0; i < applied.size();)
+        {
+            if (applied[i] != TokenKind::Unknown)
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < applied.size() && applied[j] == TokenKind::Unknown)
+            {
+                ++j;
+            }
+            if (!scope)
+            {
+                scope.emplace(document);
+            }
+            auto format = document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat();
+            ApplyFont(format);
+            format.ForegroundColor(TokenColor(TokenKind::Plain, IsDarkTheme()));
+            std::fill(applied.begin() + i, applied.begin() + j, TokenKind::Plain);
+            i = j;
+        }
+        scope.reset();
+
+        PaintVisibleText(doc);
+    }
+
+    void MainWindow::PaintVisibleText(std::shared_ptr<Document> const& doc)
+    {
+        // Colouring takes one call per token, which is slow for big files, so only the visible text
+        // (plus a margin) is coloured. More is coloured as the editor scrolls.
+        constexpr size_t Margin = 3000;
+
+        auto editor = doc->Editor;
+        auto& applied = doc->AppliedKinds;
+        auto const& desired = doc->DesiredKinds;
+        if (editor.Visibility() != Visibility::Visible || editor.ActualHeight() <= 0 || applied.size() != desired.size())
+        {
+            return; // painted once the editor is shown
+        }
+
+        // Work out the visible text from the scroll position. (RichEdit's GetRangeFromPoint can't be used:
+        // it ignores the scroll position.) Without the ScrollViewer, everything is coloured.
+        auto document = editor.Document();
+        auto const& text = doc->HighlightedText;
+        size_t from = 0;
+        size_t to = desired.size();
+        auto viewer = doc->ScrollViewer;
+        if (viewer && viewer.ExtentHeight() > 0)
+        {
+            // The visible part as fractions of the document's height, widened by half a screen each way.
+            double extent = viewer.ExtentHeight();
+            double top = viewer.VerticalOffset() / extent;
+            double bottom = (viewer.VerticalOffset() + viewer.ViewportHeight()) / extent;
+            double pad = (bottom - top) / 2;
+            top = std::clamp(top - pad, 0.0, 1.0);
+            bottom = std::clamp(bottom + pad, 0.0, 1.0);
+
+            // Lines are all the same height, so that fraction of the height is that fraction of the lines.
+            // With word wrap a long line is taller than a short one, so also take the same fraction of the
+            // characters, and colour everything either estimate covers.
+            int lines = LineCount(text);
+            auto lineFrom = static_cast<size_t>(IndexOfLine(text, static_cast<int>(top * lines) + 1));
+            auto lineTo = static_cast<size_t>(IndexOfLine(text, static_cast<int>(std::ceil(bottom * lines)) + 2));
+            auto charFrom = static_cast<size_t>(top * text.size());
+            auto charTo = static_cast<size_t>(std::ceil(bottom * text.size()));
+            from = std::min(lineFrom, charFrom);
+            from = from > Margin ? from - Margin : 0;
+            to = std::min(desired.size(), std::max(lineTo, charTo) + Margin);
+        }
+
+        bool dark = IsDarkTheme();
+        std::optional<FormattingScope> scope;
+        for (size_t i = from; i < to;)
+        {
+            if (applied[i] == desired[i])
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i + 1;
+            while (j < desired.size() && desired[j] == desired[i] && applied[j] != desired[j])
+            {
+                ++j;
+            }
+            if (!scope)
+            {
+                scope.emplace(document);
+            }
+            document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat().ForegroundColor(TokenColor(desired[i], dark));
+            std::fill(applied.begin() + i, applied.begin() + j, desired[i]);
+            i = j;
+        }
+    }
+
+    void MainWindow::ScheduleRepaint(std::shared_ptr<Document> const& doc)
+    {
+        if (doc->RepaintPending)
+        {
+            return;
+        }
+        doc->RepaintPending = true;
+        // Low priority so that layout has caught up with the scroll or resize that triggered this.
+        DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [this, strong = get_strong(), weakDoc = std::weak_ptr<Document>(doc)]
+        {
+            if (auto d = weakDoc.lock())
+            {
+                d->RepaintPending = false;
+                if (!d->RefreshPending) // otherwise the refresh repaints
+                {
+                    PaintVisibleText(d);
+                }
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Undo
+    // ---------------------------------------------------------------------------------------------
+
+    void MainWindow::RecordEdit(std::shared_ptr<Document> const& doc, size_t start, std::wstring removed, std::wstring inserted)
+    {
+        constexpr size_t MaxUndoRecords = 1000;
+
+        auto& undo = doc->UndoStack;
+        doc->RedoStack.clear();
+
+        // Typing and deleting merge into one record per word, like Visual Studio.
+        if (!undo.empty() && !std::exchange(doc->StartNewUndoRecord, false))
+        {
+            auto& last = undo.back();
+            bool lastIsInsertion = last.Removed.empty() && !last.Inserted.empty();
+            bool lastIsDeletion = last.Inserted.empty() && !last.Removed.empty();
+            if (removed.empty() && lastIsInsertion && start == last.Start + last.Inserted.size()
+                && !(IsSpace(inserted.front()) && !IsSpace(last.Inserted.back())))
+            {
+                last.Inserted += inserted;
+                return;
+            }
+            if (inserted.empty() && lastIsDeletion && start + removed.size() == last.Start && !IsSpace(removed.back()))
+            {
+                last.Start = start; // Backspace
+                last.Removed = removed + last.Removed;
+                return;
+            }
+            if (inserted.empty() && lastIsDeletion && start == last.Start && !IsSpace(removed.front()))
+            {
+                last.Removed += removed; // Delete
+                return;
+            }
+        }
+        doc->StartNewUndoRecord = false;
+
+        undo.push_back({ start, std::move(removed), std::move(inserted) });
+        if (undo.size() > MaxUndoRecords)
+        {
+            undo.erase(undo.begin());
+        }
+    }
+
+    void MainWindow::UndoOrRedo(std::shared_ptr<Document> const& doc, bool redo)
+    {
+        // Record any edit that hasn't been processed yet, so it's the first thing undone.
+        UpdateHighlighting(doc, false);
+
+        auto& from = redo ? doc->RedoStack : doc->UndoStack;
+        auto& to = redo ? doc->UndoStack : doc->RedoStack;
+        if (from.empty())
+        {
+            return;
+        }
+        UndoRecord record = std::move(from.back());
+        from.pop_back();
+
+        auto const& current = redo ? record.Removed : record.Inserted; // the text now in the document
+        auto const& replacement = redo ? record.Inserted : record.Removed;
+        int start = static_cast<int>(record.Start);
+        int end = start + static_cast<int>(current.size());
+
+        doc->ApplyingUndo = true;
+        doc->Editor.Document().GetRange(start, end).SetText(TextSetOptions::None, replacement);
+        doc->EditStart = start;
+        doc->EditEnd = end;
+        UpdateHighlighting(doc, false);
+        doc->ApplyingUndo = false;
+        doc->StartNewUndoRecord = true;
+
+        Select(doc->Editor, start + static_cast<int>(replacement.size()), 0);
+        ScrollToSelection(doc->Editor);
+        to.push_back(std::move(record));
+        UpdateDocumentState(doc);
+    }
+
+    void MainWindow::ClearUndoHistory(std::shared_ptr<Document> const& doc)
+    {
+        doc->UndoStack.clear();
+        doc->RedoStack.clear();
+        doc->StartNewUndoRecord = true;
+    }
+
+    void MainWindow::SetLanguage(std::shared_ptr<Document> const& doc, syntax::Language language)
+    {
+        doc->Language = language;
+        UpdateHighlighting(doc, false);
+        if (doc == CurrentDocument())
+        {
+            UpdateStatusBar();
+        }
+    }
+
+    void MainWindow::BuildLanguageMenus()
+    {
+        auto build = [this](Collections::IVector<MenuFlyoutItemBase> const& items, hstring const& group)
+        {
+            for (int i = 0; i < syntax::LanguageCount; ++i)
+            {
+                RadioMenuFlyoutItem item;
+                item.Text(syntax::LanguageName(static_cast<syntax::Language>(i)));
+                item.Tag(box_value(to_hstring(i)));
+                item.GroupName(group);
+                item.Click([this](IInspectable const& sender, RoutedEventArgs const&)
+                {
+                    if (auto doc = CurrentDocument())
+                    {
+                        SetLanguage(doc, static_cast<syntax::Language>(TagIndex(sender)));
+                        FocusEditor(doc);
+                    }
+                });
+                items.Append(item);
+                if (i == 0)
+                {
+                    items.Append(MenuFlyoutSeparator{}); // plain text, then the languages
+                }
+            }
+        };
+        build(LanguageMenu().Items(), L"LanguageMenu");
+        build(LanguageFlyout().Items(), L"LanguageStatus");
     }
 
     void MainWindow::SetZoom(int zoom)
@@ -1013,7 +1617,7 @@ namespace winrt::MyNotepad::implementation
 
         if (auto doc = CurrentDocument())
         {
-            hstring selected = doc->Editor.SelectedText();
+            std::wstring selected = SelectedText(doc->Editor);
             if (!selected.empty() && std::wstring_view{ selected }.find(L'\r') == std::wstring_view::npos)
             {
                 FindBox().Text(selected);
@@ -1061,7 +1665,7 @@ namespace winrt::MyNotepad::implementation
             return false;
         }
 
-        std::wstring haystack{ doc->Editor.Text() };
+        std::wstring haystack = EditorText(doc->Editor);
         if (!IsChecked(MatchCaseCheck()))
         {
             haystack = ToLower(std::move(haystack));
@@ -1069,8 +1673,8 @@ namespace winrt::MyNotepad::implementation
         }
 
         bool wrap = IsChecked(WrapAroundCheck());
-        size_t start = static_cast<size_t>(doc->Editor.SelectionStart());
-        size_t length = static_cast<size_t>(doc->Editor.SelectionLength());
+        size_t start = static_cast<size_t>(SelectionStart(doc->Editor));
+        size_t length = static_cast<size_t>(std::max(SelectionLength(doc->Editor), 0));
         size_t pos;
         if (forward)
         {
@@ -1097,8 +1701,9 @@ namespace winrt::MyNotepad::implementation
 
         StatusMessageText().Text(L"");
         bool returnFocusToFindBox = IsFocusWithin(FindPanel());
-        doc->Editor.Select(static_cast<int>(pos), static_cast<int>(needle.size()));
-        doc->Editor.Focus(FocusState::Programmatic); // scrolls the match into view
+        Select(doc->Editor, static_cast<int>(pos), static_cast<int>(needle.size()));
+        doc->Editor.Focus(FocusState::Programmatic);
+        ScrollToSelection(doc->Editor);
         if (returnFocusToFindBox)
         {
             DispatcherQueue().TryEnqueue([this, strong = get_strong()] { FindBox().Focus(FocusState::Programmatic); });
@@ -1115,7 +1720,7 @@ namespace winrt::MyNotepad::implementation
             return;
         }
 
-        std::wstring selected{ doc->Editor.SelectedText() };
+        std::wstring selected = SelectedText(doc->Editor);
         bool matches = IsChecked(MatchCaseCheck()) ? selected == needle : ToLower(selected) == ToLower(needle);
         if (matches)
         {
@@ -1134,7 +1739,7 @@ namespace winrt::MyNotepad::implementation
         }
 
         bool matchCase = IsChecked(MatchCaseCheck());
-        std::wstring text{ doc->Editor.Text() };
+        std::wstring text = EditorText(doc->Editor);
         std::wstring searchText = matchCase ? text : ToLower(text);
         std::wstring searchKey = matchCase ? needle : ToLower(needle);
         std::wstring replacement{ ReplaceBox().Text() };
@@ -1156,10 +1761,12 @@ namespace winrt::MyNotepad::implementation
         }
         result.append(text, last);
 
-        // Replace via the selection so the whole operation is a single undo step.
-        doc->Editor.SelectAll();
-        doc->Editor.SelectedText(result);
-        doc->Editor.Select(0, 0);
+        // Replace via the selection so the whole operation is a single undo step. The new text all takes
+        // one format, so the whole document is recoloured.
+        Select(doc->Editor, 0, static_cast<int>(text.size()));
+        doc->Editor.Document().Selection().SetText(TextSetOptions::None, result);
+        Select(doc->Editor, 0, 0);
+        UpdateHighlighting(doc, true);
         StatusMessageText().Text(std::format(L"Replaced {} occurrence{}", count, count == 1 ? L"" : L"s"));
     }
 
@@ -1234,9 +1841,9 @@ namespace winrt::MyNotepad::implementation
         }
 
         auto strong = get_strong();
-        hstring text = doc->Editor.Text();
+        auto text = EditorText(doc->Editor);
         int lineCount = LineCount(text);
-        int currentLine = LineColumnAt(text, doc->Editor.SelectionStart()).first;
+        int currentLine = LineColumnAt(text, SelectionStart(doc->Editor)).first;
 
         NumberBox lineBox;
         lineBox.Header(box_value(L"Line number"));
@@ -1265,7 +1872,8 @@ namespace winrt::MyNotepad::implementation
         }
 
         int line = std::clamp(static_cast<int>(lineBox.Value()), 1, lineCount);
-        doc->Editor.Select(IndexOfLine(doc->Editor.Text(), line), 0);
+        Select(doc->Editor, IndexOfLine(EditorText(doc->Editor), line), 0);
+        ScrollToSelection(doc->Editor);
         FocusEditor(doc);
     }
 

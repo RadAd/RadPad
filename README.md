@@ -16,6 +16,7 @@ The app is **unpackaged and self-contained**: the Windows App SDK runtime ships 
 - Detects UTF-8, UTF-8 BOM, UTF-16 LE/BE and ANSI encodings, plus CRLF/LF/CR line endings; you can change either from the status bar
 - Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5), Tab key inserts tabs
 - Word wrap, font picker (all system fonts), zoom (Ctrl+Plus/Minus/0, Ctrl+mouse wheel), status bar toggle
+- Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Light and dark themes have their own colours. Files over 1,000,000 characters are shown as plain text.
 - Open files from the command line or by dragging them onto the window
 - Settings are saved to `%LOCALAPPDATA%\MyNotepad\settings.ini`
 
@@ -24,4 +25,10 @@ The app is **unpackaged and self-contained**: the Windows App SDK runtime ships 
 |---|---|
 | `MainWindow.xaml` / `.h` / `.cpp` | UI, tabs, commands, find/replace, dialogs |
 | `TextFile.h` / `.cpp` | File loading and saving, encoding and line-ending handling |
+| `Syntax.h` / `.cpp` | Language detection and the tokenizer behind syntax highlighting |
+
+## How highlighting works
+Each tab's editor is a `RichEditBox` used as a plain-text editor. After each edit, `Syntax.cpp` tokenizes the whole document, then `MainWindow` recolours only the characters whose colour changed, and only in and near the visible part of the document. More is coloured as you scroll. Colouring a range is slow in RichEdit, so this keeps typing and opening large files responsive.
+
+RichEditBox's own undo is turned off because it also records formatting changes, which would make Ctrl+Z undo colours. `MainWindow` keeps its own undo history of text edits instead, grouping typing and deletions by word. For the same reason, paste always inserts plain text.
 | `App.xaml` / `.cpp` | Application entry point |

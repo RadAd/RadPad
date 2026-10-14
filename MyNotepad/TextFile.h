@@ -2,7 +2,7 @@
 
 // Loading and saving of plain-text files with encoding and line-ending detection.
 // Text handed to and returned from these functions uses '\r' as its only line break,
-// which is how the XAML TextBox stores text internally.
+// which is how the XAML text controls store text internally.
 namespace textfile
 {
     enum class TextEncoding

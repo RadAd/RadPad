@@ -118,7 +118,7 @@
                 </MenuBarItem>
 
                 <MenuBarItem Title="Edit">
-                    <!-- The TextBox handles these shortcuts natively, so only the shortcut text is shown. -->
+                    <!-- The editor handles these shortcuts natively, so only the shortcut text is shown. -->
                     <MenuFlyoutItem Text="Undo" Tag="Undo" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Z" />
                     <MenuFlyoutItem Text="Redo" Tag="Redo" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+Y" />
                     <MenuFlyoutSeparator />
@@ -164,6 +164,8 @@
                 <MenuBarItem Title="Format">
                     <ToggleMenuFlyoutItem x:Name="WordWrapItem" Text="Word wrap" Tag="WordWrap" Click="Command_Click" />
                     <MenuFlyoutItem Text="Font..." Tag="Font" Click="Command_Click" />
+                    <!-- Items are added in code, one per language. -->
+                    <MenuFlyoutSubItem x:Name="LanguageMenu" Text="Language" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="View">
@@ -222,7 +224,7 @@
                 </Grid>
             </StackPanel>
 
-            <!-- One TextBox per tab is added here from code; only the selected tab's editor is visible. -->
+            <!-- One editor per tab is added here from code; only the selected tab's editor is visible. -->
             <Grid x:Name="EditorHost" Grid.Row="2">
                 <Grid.Resources>
                     <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
@@ -253,6 +255,13 @@
                     <TextBlock x:Name="CharacterCountText" Style="{StaticResource StatusBarTextStyle}" MinWidth="90" Text="0 characters" />
                     <Border Style="{StaticResource StatusBarSeparatorStyle}" />
                     <TextBlock x:Name="ZoomText" Style="{StaticResource StatusBarTextStyle}" MinWidth="40" Text="100%" />
+                    <Border Style="{StaticResource StatusBarSeparatorStyle}" />
+                    <Button x:Name="LanguageButton" Style="{StaticResource StatusBarButtonStyle}" Content="Plain text" ToolTipService.ToolTip="Language">
+                        <Button.Flyout>
+                            <!-- Items are added in code, one per language. -->
+                            <MenuFlyout x:Name="LanguageFlyout" />
+                        </Button.Flyout>
+                    </Button>
                     <Border Style="{StaticResource StatusBarSeparatorStyle}" />
                     <Button x:Name="LineEndingButton" Style="{StaticResource StatusBarButtonStyle}" Content="Windows (CRLF)" ToolTipService.ToolTip="Line endings">
                         <Button.Flyout>
