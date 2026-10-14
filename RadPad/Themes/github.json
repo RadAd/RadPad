@@ -1,0 +1,31 @@
+{
+  "name": "GitHub",
+  "light": {
+    "background": "#FFFFFF",
+    "text": "#1F2328",
+    "comment": "#6E7781",
+    "keyword": "#CF222E",
+    "type": "#953800",
+    "string": "#0A3069",
+    "number": "#0550AE",
+    "preprocessor": "#CF222E",
+    "tag": "#116329",
+    "attribute": "#0550AE",
+    "variable": "#953800",
+    "property": "#0550AE"
+  },
+  "dark": {
+    "background": "#0D1117",
+    "text": "#E6EDF3",
+    "comment": "#8B949E",
+    "keyword": "#FF7B72",
+    "type": "#FFA657",
+    "string": "#A5D6FF",
+    "number": "#79C0FF",
+    "preprocessor": "#FF7B72",
+    "tag": "#7EE787",
+    "attribute": "#79C0FF",
+    "variable": "#FFA657",
+    "property": "#79C0FF"
+  }
+}

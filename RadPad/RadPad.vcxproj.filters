@@ -4,6 +4,9 @@
     <Filter Include="Languages">
       <UniqueIdentifier>{5B2E7C41-8D3A-4F69-9C1E-2A7D4B6E8F10}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Themes">
+      <UniqueIdentifier>{9E4C2A17-3B6D-4E85-A1F0-7C3D5B2E9A64}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
@@ -17,12 +20,14 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
+    <ClCompile Include="Themes.cpp" />
     <ClCompile Include="TextFile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Syntax.h" />
+    <ClInclude Include="Themes.h" />
     <ClInclude Include="TextFile.h" />
   </ItemGroup>
   <ItemGroup>
@@ -83,6 +88,21 @@
     </None>
     <None Include="Languages\xml.json">
       <Filter>Languages</Filter>
+    </None>
+    <None Include="Themes\github.json">
+      <Filter>Themes</Filter>
+    </None>
+    <None Include="Themes\monokai.json">
+      <Filter>Themes</Filter>
+    </None>
+    <None Include="Themes\one-dark.json">
+      <Filter>Themes</Filter>
+    </None>
+    <None Include="Themes\solarized.json">
+      <Filter>Themes</Filter>
+    </None>
+    <None Include="Themes\visual-studio.json">
+      <Filter>Themes</Filter>
     </None>
   </ItemGroup>
 </Project>

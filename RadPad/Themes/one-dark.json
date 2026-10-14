@@ -1,0 +1,17 @@
+{
+  "name": "One Dark",
+  "dark": {
+    "background": "#282C34",
+    "text": "#ABB2BF",
+    "comment": "#5C6370",
+    "keyword": "#C678DD",
+    "type": "#E5C07B",
+    "string": "#98C379",
+    "number": "#D19A66",
+    "preprocessor": "#C678DD",
+    "tag": "#E06C75",
+    "attribute": "#D19A66",
+    "variable": "#E06C75",
+    "property": "#E06C75"
+  }
+}

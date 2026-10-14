@@ -1,0 +1,31 @@
+{
+  "name": "Solarized",
+  "light": {
+    "background": "#FDF6E3",
+    "text": "#657B83",
+    "comment": "#93A1A1",
+    "keyword": "#859900",
+    "type": "#B58900",
+    "string": "#2AA198",
+    "number": "#D33682",
+    "preprocessor": "#CB4B16",
+    "tag": "#268BD2",
+    "attribute": "#B58900",
+    "variable": "#268BD2",
+    "property": "#268BD2"
+  },
+  "dark": {
+    "background": "#002B36",
+    "text": "#839496",
+    "comment": "#586E75",
+    "keyword": "#859900",
+    "type": "#B58900",
+    "string": "#2AA198",
+    "number": "#D33682",
+    "preprocessor": "#CB4B16",
+    "tag": "#268BD2",
+    "attribute": "#B58900",
+    "variable": "#268BD2",
+    "property": "#268BD2"
+  }
+}

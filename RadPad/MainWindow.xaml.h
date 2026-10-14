@@ -2,6 +2,7 @@
 
 #include "MainWindow.g.h"
 #include "Syntax.h"
+#include "Themes.h"
 #include "TextFile.h"
 
 namespace winrt::RadPad::implementation
@@ -160,7 +161,15 @@ namespace winrt::RadPad::implementation
         void SetLanguage(std::shared_ptr<Document> const& doc, syntax::LanguageId language);
         void ReloadLanguages();
         void OpenLanguageFolder();
-        void ShowLanguageErrors();
+        void ShowLoadErrors();
+
+        // Colour themes
+        void BuildColorThemeMenu();
+        void SetColorTheme(std::wstring const& name);
+        void ApplyColorTheme();
+        void ReloadThemes();
+        void OpenThemeFolder();
+        Windows::UI::Color TokenColor(syntax::TokenKind kind);
 
         // Overlay: visible whitespace, or wrapped-line markers
         void UpdateEditorOverlay();
@@ -243,6 +252,10 @@ namespace winrt::RadPad::implementation
         std::vector<std::wstring> m_recentFiles;  // most recent first
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
+        std::vector<std::wstring> m_themeErrors;    // from loading the colour themes
+        std::wstring m_colorTheme{ themes::DefaultThemeName };
+        themes::Palette m_palette;                  // the colour theme's colours for the app's light or dark mode
+        std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, int>> m_themeItems; // in the Color theme menu
         bool m_fontMonospaced{ false };    // whether the editor font is monospaced
         double m_spaceAdvance{ 0.5 };      // width of a space in the editor font, as a fraction of the font size
         bool m_insertSpaces{ false };      // Tab key inserts spaces rather than a tab

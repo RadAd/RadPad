@@ -196,6 +196,9 @@
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
                     <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
                     <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
+                    <MenuFlyoutSeparator />
+                    <!-- Items are added in code, one per loaded theme. -->
+                    <MenuFlyoutSubItem x:Name="ColorThemeMenu" Text="Color theme" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Help">

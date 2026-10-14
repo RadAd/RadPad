@@ -1,0 +1,17 @@
+{
+  "name": "Monokai",
+  "dark": {
+    "background": "#272822",
+    "text": "#F8F8F2",
+    "comment": "#75715E",
+    "keyword": "#F92672",
+    "type": "#66D9EF",
+    "string": "#E6DB74",
+    "number": "#AE81FF",
+    "preprocessor": "#F92672",
+    "tag": "#F92672",
+    "attribute": "#A6E22E",
+    "variable": "#FD971F",
+    "property": "#A6E22E"
+  }
+}

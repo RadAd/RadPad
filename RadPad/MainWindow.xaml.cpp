@@ -349,18 +349,6 @@ namespace
         return c == L' ' || c == L'\t' || c == L'\r';
     }
 
-    // Visual Studio-like colours for each TokenKind, as 0xRRGGBB.
-    Windows::UI::Color TokenColor(TokenKind kind, bool dark)
-    {
-        static constexpr uint32_t lightColors[] = { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5 };
-        static constexpr uint32_t darkColors[] = { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE };
-        static_assert(std::size(lightColors) == static_cast<size_t>(TokenKind::Unknown) && std::size(darkColors) == std::size(lightColors));
-
-        auto index = static_cast<size_t>(kind);
-        uint32_t rgb = (dark ? darkColors : lightColors)[index < std::size(lightColors) ? index : 0];
-        return { 0xFF, static_cast<uint8_t>(rgb >> 16), static_cast<uint8_t>(rgb >> 8), static_cast<uint8_t>(rgb) };
-    }
-
     // Line and column (both 1-based) of a character index. Editor text uses '\r' for every line break.
     std::pair<int, int> LineColumnAt(std::wstring_view text, int index)
     {
@@ -400,9 +388,7 @@ namespace
         return line <= 1 ? 0 : static_cast<int>(text.size());
     }
 
-    // %LOCALAPPDATA%\RadPad, where settings and the user's language definitions are kept. The app was
-    // called MyNotepad before, so the first time, the old folder's contents are copied in; the old folder
-    // is left as it was.
+    // %LOCALAPPDATA%\RadPad, where settings and the user's language definitions are kept.
     std::wstring AppDataFolder()
     {
         PWSTR folder = nullptr;
@@ -410,18 +396,10 @@ namespace
         {
             return {};
         }
-        std::wstring localAppData{ folder };
+        std::wstring directory = std::wstring(folder) + L"\\RadPad";
         CoTaskMemFree(folder);
-
-        std::filesystem::path directory = localAppData + L"\\RadPad";
-        std::filesystem::path oldDirectory = localAppData + L"\\MyNotepad";
-        std::error_code error;
-        if (!std::filesystem::exists(directory, error) && std::filesystem::is_directory(oldDirectory, error))
-        {
-            std::filesystem::copy(oldDirectory, directory, std::filesystem::copy_options::recursive, error);
-        }
-        std::filesystem::create_directories(directory, error);
-        return directory.wstring();
+        CreateDirectoryW(directory.c_str(), nullptr);
+        return directory;
     }
 
     std::wstring SettingsFilePath()
@@ -467,6 +445,13 @@ namespace
         return directory.empty() ? std::wstring{} : directory + L"\\Languages";
     }
 
+    // %LOCALAPPDATA%\RadPad\Themes: colour themes added or customised by the user.
+    std::wstring UserThemeFolder()
+    {
+        std::wstring directory = AppDataFolder();
+        return directory.empty() ? std::wstring{} : directory + L"\\Themes";
+    }
+
     // Where language definitions are loaded from: the Languages folder installed beside the exe, then
     // the user's folder, whose definitions override installed ones with the same name.
     std::wstring ExePath()
@@ -486,6 +471,14 @@ namespace
         auto exe = ExePath();
         std::wstring appFolder = exe.substr(0, exe.find_last_of(L'\\'));
         return { appFolder + L"\\Languages", UserLanguageFolder() };
+    }
+
+    // Where colour themes are loaded from, as for languages: beside the exe, then the user's folder.
+    std::vector<std::wstring> ThemeFolders()
+    {
+        auto exe = ExePath();
+        std::wstring appFolder = exe.substr(0, exe.find_last_of(L'\\'));
+        return { appFolder + L"\\Themes", UserThemeFolder() };
     }
 
     std::vector<std::wstring> GetSystemFontFamilies()
@@ -781,20 +774,16 @@ namespace winrt::RadPad::implementation
         AddZoomAccelerators();
         m_languageErrors = syntax::LoadLanguages(LanguageFolders());
         BuildLanguageMenus();
+        m_themeErrors = themes::LoadThemes(ThemeFolders());
+        BuildColorThemeMenu();
+        ApplyColorTheme();
         BuildIndentMenus();
         ShowWhitespaceItem().IsChecked(m_showWhitespace);
         TrailingWhitespaceItem().IsChecked(m_highlightTrailingWhitespace);
         UpdateWhitespaceAvailability();
 
-        // Syntax colours differ between light and dark themes.
-        RootGrid().ActualThemeChanged([this](auto&&, auto&&)
-        {
-            for (auto const& doc : m_documents)
-            {
-                ApplyEditorSettings(doc);
-                UpdateHighlighting(doc, true);
-            }
-        });
+        // A colour theme can have different colours for the app's light and dark modes.
+        RootGrid().ActualThemeChanged([this](auto&&, auto&&) { ApplyColorTheme(); });
 
         // handledEventsToo: the editor handles drag events itself, but we still want file drops anywhere.
         RootGrid().AddHandler(UIElement::DragOverEvent(), box_value(DragEventHandler{ this, &MainWindow::OnDragOver }), true);
@@ -831,9 +820,9 @@ namespace winrt::RadPad::implementation
         {
             CreateDocument();
         }
-        if (!m_languageErrors.empty())
+        if (!m_languageErrors.empty() || !m_themeErrors.empty())
         {
-            ShowLanguageErrors();
+            ShowLoadErrors();
         }
     }
 
@@ -2015,6 +2004,10 @@ namespace winrt::RadPad::implementation
         editor.FontWeight(m_fontBold ? Microsoft::UI::Text::FontWeights::Bold() : Microsoft::UI::Text::FontWeights::Normal());
         editor.FontStyle(m_fontItalic ? Windows::UI::Text::FontStyle::Italic : Windows::UI::Text::FontStyle::Normal);
         editor.TextWrapping(m_wordWrap ? TextWrapping::Wrap : TextWrapping::NoWrap);
+        // A dark colour theme with the app in light mode, or the other way round, brings its own background;
+        // match the editor to it so the caret, selection and scrollbars stay visible.
+        bool appIsDark = IsDarkTheme();
+        editor.RequestedTheme(m_palette.Dark == appIsDark ? ElementTheme::Default : m_palette.Dark ? ElementTheme::Dark : ElementTheme::Light);
         // With word wrap, room on the right for the wrap markers (see DrawWrapMarkers).
         editor.Padding(Thickness{ EditorPadding, 8, EditorPadding + (m_wordWrap ? WrapMarkerWidth : 0), 8 });
 
@@ -2024,7 +2017,7 @@ namespace winrt::RadPad::implementation
         FormattingScope scope{ document };
         auto defaultFormat = document.GetDefaultCharacterFormat();
         ApplyFont(defaultFormat);
-        defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain, IsDarkTheme()));
+        defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain));
         document.SetDefaultCharacterFormat(defaultFormat);
         // Tab stops every m_tabWidth spaces, in points (the font size is in points too). RichEditBox
         // paragraphs also carry an explicit stop at half an inch, which would come first, so clear it.
@@ -2152,7 +2145,7 @@ namespace winrt::RadPad::implementation
             }
             auto format = document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat();
             ApplyFont(format);
-            format.ForegroundColor(TokenColor(TokenKind::Plain, IsDarkTheme()));
+            format.ForegroundColor(TokenColor(TokenKind::Plain));
             std::fill(applied.begin() + i, applied.begin() + j, TokenKind::Plain);
             i = j;
         }
@@ -2205,7 +2198,6 @@ namespace winrt::RadPad::implementation
             to = std::min(desired.size(), std::max(lineTo, charTo) + Margin);
         }
 
-        bool dark = IsDarkTheme();
         std::optional<FormattingScope> scope;
         for (size_t i = from; i < to;)
         {
@@ -2223,7 +2215,7 @@ namespace winrt::RadPad::implementation
             {
                 scope.emplace(document);
             }
-            document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat().ForegroundColor(TokenColor(desired[i], dark));
+            document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat().ForegroundColor(TokenColor(desired[i]));
             std::fill(applied.begin() + i, applied.begin() + j, desired[i]);
             i = j;
         }
@@ -2964,7 +2956,7 @@ namespace winrt::RadPad::implementation
 
         if (!m_languageErrors.empty())
         {
-            ShowLanguageErrors();
+            ShowLoadErrors();
         }
         else
         {
@@ -2980,14 +2972,120 @@ namespace winrt::RadPad::implementation
         ShellExecuteW(WindowHandle(), L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     }
 
-    void MainWindow::ShowLanguageErrors()
+    void MainWindow::ShowLoadErrors()
     {
-        std::wstring message = L"These language definitions couldn't be loaded:\n";
-        for (auto const& error : m_languageErrors)
+        // Language and theme files together, as only one message can be shown at a time.
+        std::wstring message;
+        auto list = [&](wchar_t const* heading, std::vector<std::wstring> const& errors)
         {
-            message += L"\n\x2022 " + error;
+            if (errors.empty())
+            {
+                return;
+            }
+            message += message.empty() ? heading : std::wstring(L"\n\n") + heading;
+            for (auto const& error : errors)
+            {
+                message += L"\n\x2022 " + error;
+            }
+        };
+        list(L"These language definitions couldn't be loaded:\n", m_languageErrors);
+        list(L"These colour themes couldn't be loaded:\n", m_themeErrors);
+        if (!message.empty())
+        {
+            ShowMessageAsync(L"Language and theme files", hstring{ message });
         }
-        ShowMessageAsync(L"Language definitions", hstring{ message });
+    }
+
+    void MainWindow::BuildColorThemeMenu()
+    {
+        auto items = ColorThemeMenu().Items();
+        items.Clear();
+        m_themeItems.clear();
+        for (int theme = 0; theme < themes::ThemeCount(); ++theme)
+        {
+            RadioMenuFlyoutItem item;
+            item.Text(themes::ThemeName(theme));
+            item.GroupName(L"ColorTheme");
+            item.Click([this, theme](auto&&, auto&&) { SetColorTheme(std::wstring{ themes::ThemeName(theme) }); });
+            items.Append(item);
+            m_themeItems.emplace_back(item, theme);
+        }
+
+        // Commands for people editing the themes.
+        auto command = [&](wchar_t const* text, std::function<void()> action)
+        {
+            MenuFlyoutItem item;
+            item.Text(text);
+            item.Click([action](auto&&, auto&&) { action(); });
+            items.Append(item);
+        };
+        items.Append(MenuFlyoutSeparator{});
+        command(L"Open themes folder", [this] { OpenThemeFolder(); });
+        command(L"Reload themes", [this] { ReloadThemes(); });
+    }
+
+    void MainWindow::SetColorTheme(std::wstring const& name)
+    {
+        m_colorTheme = name;
+        ApplyColorTheme();
+        SaveSettings();
+        if (auto doc = CurrentDocument())
+        {
+            FocusEditor(doc);
+        }
+    }
+
+    void MainWindow::ApplyColorTheme()
+    {
+        // The palette depends on whether the app is light or dark, so this also runs when that changes.
+        int theme = themes::FindTheme(m_colorTheme);
+        m_palette = themes::ThemePalette(theme, IsDarkTheme());
+        if (m_palette.Background)
+        {
+            EditorHost().Background(SolidColorBrush{ *m_palette.Background });
+        }
+        else
+        {
+            EditorHost().ClearValue(Panel::BackgroundProperty()); // the app's own background
+        }
+        for (auto const& [item, index] : m_themeItems)
+        {
+            item.IsChecked(index == theme);
+        }
+        for (auto const& doc : m_documents)
+        {
+            ApplyEditorSettings(doc);
+            UpdateHighlighting(doc, true);
+        }
+    }
+
+    Windows::UI::Color MainWindow::TokenColor(TokenKind kind)
+    {
+        auto index = static_cast<size_t>(kind);
+        return m_palette.Colors[index < m_palette.Colors.size() ? index : 0];
+    }
+
+    void MainWindow::ReloadThemes()
+    {
+        m_themeErrors = themes::LoadThemes(ThemeFolders());
+        BuildColorThemeMenu();
+        ApplyColorTheme();
+        if (!m_themeErrors.empty())
+        {
+            ShowLoadErrors();
+        }
+        else
+        {
+            StatusMessageText().Text(std::format(L"Loaded {} colour themes", themes::ThemeCount()));
+        }
+    }
+
+    void MainWindow::OpenThemeFolder()
+    {
+        // The per-user folder, where added and customised themes go.
+        auto folder = UserThemeFolder();
+        SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr);
+        ShellExecuteW(WindowHandle(), L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     }
 
     void MainWindow::SetZoom(int zoom)
@@ -3458,6 +3556,8 @@ namespace winrt::RadPad::implementation
         wchar_t buffer[256]{};
         GetPrivateProfileStringW(L"Editor", L"FontFamily", L"Consolas", buffer, ARRAYSIZE(buffer), path.c_str());
         m_fontFamily = buffer[0] ? buffer : L"Consolas";
+        GetPrivateProfileStringW(L"View", L"ColorTheme", themes::DefaultThemeName, buffer, ARRAYSIZE(buffer), path.c_str());
+        m_colorTheme = buffer[0] ? buffer : themes::DefaultThemeName;
         GetPrivateProfileStringW(L"Editor", L"FontSize", L"11", buffer, ARRAYSIZE(buffer), path.c_str());
         m_fontPoints = _wtof(buffer);
         if (m_fontPoints < 1 || m_fontPoints > 400)
@@ -3495,6 +3595,7 @@ namespace winrt::RadPad::implementation
         }
 
         WritePrivateProfileStringW(L"Editor", L"FontFamily", m_fontFamily.c_str(), path.c_str());
+        WritePrivateProfileStringW(L"View", L"ColorTheme", m_colorTheme.c_str(), path.c_str());
         WritePrivateProfileStringW(L"Editor", L"FontSize", std::format(L"{:g}", m_fontPoints).c_str(), path.c_str());
         WritePrivateProfileStringW(L"Editor", L"Bold", m_fontBold ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"Editor", L"Italic", m_fontItalic ? L"1" : L"0", path.c_str());

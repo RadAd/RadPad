@@ -29,11 +29,11 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 - **View > Show whitespace** marks spaces with `·` and tabs with `→`. Markers are drawn over the editor rather than inserted into the text. It's only available with a monospaced font and word wrap off, because markers are placed by line and column.
 - **View > Highlight trailing whitespace** (on by default) shades spaces and tabs at the ends of lines, including lines that are only whitespace. Whitespace ending at the cursor isn't shaded, so it doesn't flash while you type.
 - With word wrap on, a `↵` marker in the right margin shows each row that continues on the next row, so wrapped lines can be told apart from separate lines.
-- Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Light and dark themes have their own colours. Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
+- Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Colours come from the colour theme chosen under **View > Color theme**: Visual Studio (the default), GitHub, Solarized, Monokai or One Dark, or your own (see below). Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
 - Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the RadPad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting RadPad without files always opens a new window.
 - **File > Recent files** lists the last 10 files opened or saved, newest first. Choosing a file that no longer exists removes it from the list.
 - The same files appear under **Recent** when you right-click RadPad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
-- Settings and the recent files list are saved to `%LOCALAPPDATA%\RadPad\settings.ini` (UTF-16, so paths in any language are kept). The app used to be called MyNotepad: the first time it runs, it copies `%LOCALAPPDATA%\MyNotepad` there and leaves the old folder in place.
+- Settings and the recent files list are saved to `%LOCALAPPDATA%\RadPad\settings.ini` (UTF-16, so paths in any language are kept)
 
 ## Source layout
 | File | Purpose |
@@ -43,6 +43,8 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 | `Instance.h` / `.cpp` | Sends command-line files to a window already open on the current virtual desktop |
 | `Syntax.h` / `.cpp` | Loads the language definitions, detects a file's language and tokenizes text for highlighting |
 | `Languages/*.json` | The built-in language definitions, copied to the output's `Languages` folder |
+| `Themes.h` / `.cpp` | Loads the colour themes and picks the colours for the app's light or dark mode |
+| `Themes/*.json` | The built-in colour themes, copied to the output's `Themes` folder |
 | `App.xaml` / `.cpp` | Application entry point |
 | `RadPad.ico` / `RadPad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
 | `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico` after changing it |
@@ -99,4 +101,29 @@ Lists such as `keywords` can be either an array of strings or a single string of
 | `objectKeys` | `true` to colour JSON object keys differently from other strings. |
 | `scriptLanguage`, `styleLanguage` | Markup only: names of the languages used inside `<script>` and `<style>` elements. |
 
-Colours come from the token kinds (keyword, type, string, comment and so on) and follow the app's light or dark theme. They can't be set per language.
+Colours come from the token kinds (keyword, type, string, comment and so on) and the colour theme. They can't be set per language.
+
+## Colour themes
+**View > Color theme** picks the colours used for syntax highlighting. Each theme is a JSON file, loaded at startup from:
+
+1. `Themes` next to `RadPad.exe`: the built-in themes.
+2. `%LOCALAPPDATA%\RadPad\Themes`: your own. **View > Color theme > Open themes folder** opens it.
+
+A theme with the same `name` as a built-in one replaces it. Use **Reload themes** to apply edits without restarting. Files that can't be loaded are listed in a message, with the reason.
+
+A theme has a `light` set of colours, a `dark` set, or both. With both, the editor follows Windows' light or dark mode. With only one, that set is used in either mode, and if the app's mode doesn't match it, the editor switches to match so the cursor and selection stay visible.
+
+```json
+{
+  "name": "Paper",
+  "light": {
+    "background": "#FFFFFF",
+    "text": "#333333",
+    "comment": "#999999",
+    "keyword": "#0055AA",
+    "string": "#AA5500"
+  }
+}
+```
+
+Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable` and `property`; any left out use the `text` colour. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.

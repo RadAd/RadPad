@@ -110,6 +110,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Syntax.h" />
+    <ClInclude Include="Themes.h" />
     <ClInclude Include="TextFile.h" />
     <ClInclude Include="App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
@@ -128,6 +129,7 @@
     </ClCompile>
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
+    <ClCompile Include="Themes.cpp" />
     <ClCompile Include="TextFile.cpp" />
     <ClCompile Include="App.xaml.cpp">
       <DependentUpon>App.xaml</DependentUpon>
@@ -198,6 +200,24 @@
       <DeploymentContent>true</DeploymentContent>
     </None>
     <None Include="Languages\xml.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Colour themes for syntax highlighting, copied to the output's Themes folder. -->
+    <None Include="Themes\github.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Themes\monokai.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Themes\one-dark.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Themes\solarized.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Themes\visual-studio.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
   </ItemGroup>

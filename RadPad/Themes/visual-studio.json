@@ -1,0 +1,29 @@
+{
+  "name": "Visual Studio",
+  "light": {
+    "text": "#000000",
+    "comment": "#008000",
+    "keyword": "#0000FF",
+    "type": "#2B91AF",
+    "string": "#A31515",
+    "number": "#098658",
+    "preprocessor": "#808080",
+    "tag": "#800000",
+    "attribute": "#E50000",
+    "variable": "#001080",
+    "property": "#0451A5"
+  },
+  "dark": {
+    "text": "#FFFFFF",
+    "comment": "#6A9955",
+    "keyword": "#569CD6",
+    "type": "#4EC9B0",
+    "string": "#CE9178",
+    "number": "#B5CEA8",
+    "preprocessor": "#9B9B9B",
+    "tag": "#569CD6",
+    "attribute": "#9CDCFE",
+    "variable": "#9CDCFE",
+    "property": "#9CDCFE"
+  }
+}
