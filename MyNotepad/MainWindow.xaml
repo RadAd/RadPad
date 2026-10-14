@@ -16,7 +16,8 @@
     <Grid x:Name="RootGrid"
           AllowDrop="True"
           Loaded="RootGrid_Loaded"
-          PreviewKeyDown="RootGrid_PreviewKeyDown">
+          PreviewKeyDown="RootGrid_PreviewKeyDown"
+          PreviewKeyUp="RootGrid_PreviewKeyUp">
         <Grid.Resources>
             <Style x:Key="StatusBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Background" Value="Transparent" />

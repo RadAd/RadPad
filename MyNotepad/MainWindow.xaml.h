@@ -58,6 +58,7 @@ namespace winrt::MyNotepad::implementation
         // XAML event handlers
         void RootGrid_Loaded(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
         void RootGrid_PreviewKeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
+        void RootGrid_PreviewKeyUp(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void Tabs_AddTabButtonClick(Microsoft::UI::Xaml::Controls::TabView const& sender, Windows::Foundation::IInspectable const& e);
         void Tabs_TabCloseRequested(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabCloseRequestedEventArgs const& e);
         void Tabs_SelectionChanged(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& e);
@@ -139,7 +140,9 @@ namespace winrt::MyNotepad::implementation
         fire_and_forget CloseDocumentsAsync(std::vector<std::shared_ptr<Document>> docs, std::shared_ptr<Document> keep);
         void RemoveDocument(std::shared_ptr<Document> const& doc);
         void OpenContainingFolder(std::wstring const& path);
-        void SelectAdjacentTab(int delta);
+        void CycleRecentTabs(bool backwards);
+        void EndTabCycle();
+        void NoteRecentTab(std::shared_ptr<Document> const& doc);
         void SelectTabAt(int index);
         void OnCurrentDocumentChanged();
         void FocusEditor(std::shared_ptr<Document> const& doc);
@@ -223,6 +226,9 @@ namespace winrt::MyNotepad::implementation
         void SaveSettings();
 
         std::vector<std::shared_ptr<Document>> m_documents;
+        std::vector<std::weak_ptr<Document>> m_recentTabs;    // most recently used first, for Ctrl+Tab
+        std::vector<std::shared_ptr<Document>> m_tabCycle;    // the order being stepped through while Ctrl is held
+        int m_tabCycleIndex{ 0 };
         std::weak_ptr<Document> m_tabMenuDocument; // the tab whose right-click menu is open
         std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, syntax::LanguageId>> m_languageItems; // both language menus
         std::wstring m_fontFamily{ L"Consolas" };

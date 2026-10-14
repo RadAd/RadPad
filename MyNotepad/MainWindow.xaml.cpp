@@ -749,6 +749,10 @@ namespace winrt::MyNotepad::implementation
                 SyncWithJumpList();
                 m_jumpListSyncTimer.Start();
             }
+            if (args.WindowActivationState() == WindowActivationState::Deactivated)
+            {
+                EndTabCycle(); // Ctrl may be released in another window
+            }
         });
         RecentFilesMenu().PointerEntered([this](auto&&, auto&&) { SyncWithJumpList(); });
         RecentFilesMenu().GotFocus([this](auto&&, auto&&) { SyncWithJumpList(); });
@@ -839,7 +843,7 @@ namespace winrt::MyNotepad::implementation
 
         if (key == VirtualKey::Tab)
         {
-            SelectAdjacentTab(shift ? -1 : 1);
+            CycleRecentTabs(shift);
             e.Handled(true);
         }
         else if ((key == VirtualKey::W || key == VirtualKey::F4) && !shift)
@@ -1569,6 +1573,9 @@ namespace winrt::MyNotepad::implementation
             EditorHost().Children().RemoveAt(index);
         }
         std::erase(m_documents, doc);
+        std::erase(m_tabCycle, doc);
+        EndTabCycle();
+        NoteRecentTab(CurrentDocument()); // also drops the closed document
 
         // Like Notepad, closing the last tab closes the window.
         if (m_documents.empty())
@@ -1578,12 +1585,69 @@ namespace winrt::MyNotepad::implementation
         }
     }
 
-    void MainWindow::SelectAdjacentTab(int delta)
+    void MainWindow::CycleRecentTabs(bool backwards)
     {
-        int count = static_cast<int>(Tabs().TabItems().Size());
-        if (count > 1)
+        // Like Visual Studio: Ctrl+Tab goes to the tab used before this one, and pressing Tab again while
+        // Ctrl is held goes further back. The order stays fixed until Ctrl is released (EndTabCycle), so
+        // repeated presses visit every tab rather than swapping between two.
+        if (m_tabCycle.empty())
         {
-            SelectTabAt((Tabs().SelectedIndex() + delta + count) % count);
+            for (auto const& weak : m_recentTabs)
+            {
+                if (auto doc = weak.lock())
+                {
+                    m_tabCycle.push_back(doc);
+                }
+            }
+            for (auto const& doc : m_documents) // any not yet shown, oldest last
+            {
+                if (std::find(m_tabCycle.begin(), m_tabCycle.end(), doc) == m_tabCycle.end())
+                {
+                    m_tabCycle.push_back(doc);
+                }
+            }
+            m_tabCycleIndex = 0;
+        }
+
+        int count = static_cast<int>(m_tabCycle.size());
+        if (count < 2)
+        {
+            m_tabCycle.clear();
+            return;
+        }
+        m_tabCycleIndex = (m_tabCycleIndex + (backwards ? count - 1 : 1)) % count;
+        Tabs().SelectedItem(m_tabCycle[m_tabCycleIndex]->Tab);
+    }
+
+    void MainWindow::EndTabCycle()
+    {
+        if (!m_tabCycle.empty())
+        {
+            m_tabCycle.clear();
+            NoteRecentTab(CurrentDocument());
+        }
+    }
+
+    void MainWindow::NoteRecentTab(std::shared_ptr<Document> const& doc)
+    {
+        // Moves doc to the front of the most-recently-used order, dropping closed documents.
+        std::erase_if(m_recentTabs, [&](auto const& weak)
+        {
+            auto other = weak.lock();
+            return !other || other == doc;
+        });
+        if (doc)
+        {
+            m_recentTabs.insert(m_recentTabs.begin(), doc);
+        }
+    }
+
+    void MainWindow::RootGrid_PreviewKeyUp(IInspectable const&, KeyRoutedEventArgs const& e)
+    {
+        auto key = e.Key();
+        if (key == VirtualKey::Control || key == VirtualKey::LeftControl || key == VirtualKey::RightControl)
+        {
+            EndTabCycle();
         }
     }
 
@@ -1616,6 +1680,10 @@ namespace winrt::MyNotepad::implementation
     void MainWindow::OnCurrentDocumentChanged()
     {
         auto current = CurrentDocument();
+        if (m_tabCycle.empty()) // while cycling with Ctrl+Tab, the order changes when Ctrl is released
+        {
+            NoteRecentTab(current);
+        }
         for (auto const& doc : m_documents)
         {
             doc->Editor.Visibility(doc == current ? Visibility::Visible : Visibility::Collapsed);
