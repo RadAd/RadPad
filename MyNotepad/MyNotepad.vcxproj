@@ -163,4 +163,22 @@
     <Error Condition="!Exists('..\packages\Microsoft.WindowsAppSDK.1.7.260224002\build\native\Microsoft.WindowsAppSDK.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.WindowsAppSDK.1.7.260224002\build\native\Microsoft.WindowsAppSDK.props'))" />
     <Error Condition="!Exists('..\packages\Microsoft.WindowsAppSDK.1.7.260224002\build\native\Microsoft.WindowsAppSDK.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.WindowsAppSDK.1.7.260224002\build\native\Microsoft.WindowsAppSDK.targets'))" />
   </Target>
+  <!--
+    The Windows App SDK's WindowsAppRuntimeAutoInitializer target adds its .cpp with metadata that refers to
+    %(PreprocessorDefinitions). MSBuild batches that over the existing ClCompile items (see message MSB4120),
+    so the file is added once per distinct set of definitions: twice here. The duplicate causes warnings
+    MSB8027 and LNK4042 and makes the file recompile on every build. Keep only the first copy.
+  -->
+  <Target Name="RemoveDuplicateAutoInitializer" AfterTargets="WindowsAppRuntimeAutoInitializer">
+    <ItemGroup>
+      <_AutoInitializerCpp Include="@(ClCompile)" Condition="'%(ClCompile.Filename)%(ClCompile.Extension)' == 'WindowsAppRuntimeAutoInitializer.cpp'" />
+    </ItemGroup>
+    <RemoveDuplicates Inputs="@(_AutoInitializerCpp)">
+      <Output TaskParameter="Filtered" ItemName="_AutoInitializerCppOnce" />
+    </RemoveDuplicates>
+    <ItemGroup>
+      <ClCompile Remove="@(_AutoInitializerCpp)" />
+      <ClCompile Include="@(_AutoInitializerCppOnce)" />
+    </ItemGroup>
+  </Target>
 </Project>
