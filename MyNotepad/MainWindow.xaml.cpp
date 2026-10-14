@@ -129,11 +129,6 @@ namespace
         editor.Document().Selection().SetRange(start, start + length);
     }
 
-    void ScrollToSelection(RichEditBox const& editor)
-    {
-        editor.Document().Selection().ScrollIntoView(PointOptions::None);
-    }
-
     // Copies as plain text with CRLF line breaks, whatever the selection's formatting.
     void CopySelection(RichEditBox const& editor)
     {
@@ -253,6 +248,54 @@ namespace
             }
         }
         return row;
+    }
+
+    // Whether the character at position is out of view, vertically and horizontally.
+    std::pair<bool, bool> OutOfView(RichEditTextDocument const& document, int position, ScrollViewer const& viewer)
+    {
+        if (!viewer || viewer.ViewportHeight() <= 0)
+        {
+            return { false, false };
+        }
+        auto rect = CharRectInView(document, position, position + 1, viewer);
+        return { rect.Y < 0 || rect.Y + rect.Height > viewer.ViewportHeight(), rect.X < 0 || rect.X + rect.Width > viewer.ViewportWidth() };
+    }
+
+    // Centres the character at position in the directions it was out of view (see OutOfView), once the
+    // editor has finished its own scrolling: changing the selection makes it scroll the caret just into
+    // view, which leaves text that was out of view at the very edge, where it's easy to miss.
+    void CentreInView(RichEditBox const& editor, ScrollViewer const& viewer, int position, std::pair<bool, bool> outOfView)
+    {
+        auto [vertically, horizontally] = outOfView;
+        if (!viewer || (!vertically && !horizontally))
+        {
+            return;
+        }
+        editor.DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [editor, viewer, position, vertically, horizontally]
+        {
+            auto rect = CharRectInView(editor.Document(), position, position + 1, viewer);
+            Windows::Foundation::IReference<double> horizontal;
+            Windows::Foundation::IReference<double> vertical;
+            if (vertically)
+            {
+                vertical = std::max(0.0, viewer.VerticalOffset() + rect.Y - (viewer.ViewportHeight() - rect.Height) / 2);
+            }
+            if (horizontally)
+            {
+                // Back to the left edge if the text fits from there, otherwise a third of the way in.
+                double x = viewer.HorizontalOffset() + rect.X;
+                horizontal = x + rect.Width <= viewer.ViewportWidth() ? 0.0 : std::max(0.0, x - viewer.ViewportWidth() / 3);
+            }
+            viewer.ChangeView(horizontal, vertical, nullptr, true);
+        });
+    }
+
+    // Selects text; if it was out of view, centres it. Text already in view doesn't move.
+    void SelectAndReveal(RichEditBox const& editor, ScrollViewer const& viewer, int start, int length)
+    {
+        auto outOfView = OutOfView(editor.Document(), start, viewer); // before selecting, which scrolls
+        Select(editor, start, length);
+        CentreInView(editor, viewer, start, outOfView);
     }
 
     struct FontMetrics
@@ -1791,7 +1834,6 @@ namespace winrt::MyNotepad::implementation
         if (auto doc = weakDoc.lock())
         {
             InsertText(doc->Editor, textfile::NormalizeLineBreaks(text));
-            ScrollToSelection(doc->Editor);
         }
     }
 
@@ -2743,6 +2785,8 @@ namespace winrt::MyNotepad::implementation
         int start = static_cast<int>(record.Start);
         int end = start + static_cast<int>(current.size());
 
+        // Whether the edit is out of view, before changing the text makes the editor scroll.
+        auto outOfView = OutOfView(doc->Editor.Document(), start, doc->ScrollViewer);
         doc->ApplyingUndo = true;
         doc->Editor.Document().GetRange(start, end).SetText(TextSetOptions::None, replacement);
         doc->EditStart = start;
@@ -2752,7 +2796,7 @@ namespace winrt::MyNotepad::implementation
         doc->StartNewUndoRecord = true;
 
         Select(doc->Editor, start + static_cast<int>(replacement.size()), 0);
-        ScrollToSelection(doc->Editor);
+        CentreInView(doc->Editor, doc->ScrollViewer, start, outOfView);
         to.push_back(std::move(record));
         UpdateDocumentState(doc);
     }
@@ -2983,9 +3027,8 @@ namespace winrt::MyNotepad::implementation
 
         StatusMessageText().Text(L"");
         bool returnFocusToFindBox = IsFocusWithin(FindPanel());
-        Select(doc->Editor, static_cast<int>(pos), static_cast<int>(needle.size()));
+        SelectAndReveal(doc->Editor, doc->ScrollViewer, static_cast<int>(pos), static_cast<int>(needle.size()));
         doc->Editor.Focus(FocusState::Programmatic);
-        ScrollToSelection(doc->Editor);
         if (returnFocusToFindBox)
         {
             DispatcherQueue().TryEnqueue([this, strong = get_strong()] { FindBox().Focus(FocusState::Programmatic); });
@@ -3154,8 +3197,7 @@ namespace winrt::MyNotepad::implementation
         }
 
         int line = std::clamp(static_cast<int>(lineBox.Value()), 1, lineCount);
-        Select(doc->Editor, IndexOfLine(EditorText(doc->Editor), line), 0);
-        ScrollToSelection(doc->Editor);
+        SelectAndReveal(doc->Editor, doc->ScrollViewer, IndexOfLine(EditorText(doc->Editor), line), 0);
         FocusEditor(doc);
     }
 
