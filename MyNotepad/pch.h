@@ -44,6 +44,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>

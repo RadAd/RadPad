@@ -166,6 +166,8 @@
                     <MenuFlyoutItem Text="Font..." Tag="Font" Click="Command_Click" />
                     <!-- Items are added in code, one per language. -->
                     <MenuFlyoutSubItem x:Name="LanguageMenu" Text="Language" />
+                    <!-- Tab key behaviour and tab width; items are added in code. -->
+                    <MenuFlyoutSubItem x:Name="TabsMenu" Text="Tabs" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="View">
@@ -259,6 +261,13 @@
                     <TextBlock x:Name="CharacterCountText" Style="{StaticResource StatusBarTextStyle}" MinWidth="90" Text="0 characters" />
                     <Border Style="{StaticResource StatusBarSeparatorStyle}" />
                     <TextBlock x:Name="ZoomText" Style="{StaticResource StatusBarTextStyle}" MinWidth="40" Text="100%" />
+                    <Border Style="{StaticResource StatusBarSeparatorStyle}" />
+                    <Button x:Name="IndentButton" Style="{StaticResource StatusBarButtonStyle}" Content="Tab width: 8" ToolTipService.ToolTip="Tabs and indentation">
+                        <Button.Flyout>
+                            <!-- Items are added in code. -->
+                            <MenuFlyout x:Name="IndentFlyout" />
+                        </Button.Flyout>
+                    </Button>
                     <Border Style="{StaticResource StatusBarSeparatorStyle}" />
                     <Button x:Name="LanguageButton" Style="{StaticResource StatusBarButtonStyle}" Content="Plain text" ToolTipService.ToolTip="Language">
                         <Button.Flyout>

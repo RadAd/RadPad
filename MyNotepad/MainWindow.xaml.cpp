@@ -180,8 +180,14 @@ namespace
         return nullptr;
     }
 
-    // Whether a font is monospaced and, if so, its character advance as a fraction of the font size.
-    std::optional<double> MonospacedAdvance(std::wstring const& family, bool bold, bool italic)
+    struct FontMetrics
+    {
+        bool Monospaced{ false };
+        double SpaceAdvance{ 0.5 }; // width of a space as a fraction of the font size
+    };
+
+    // Metrics of an installed font, or nullopt if it can't be found.
+    std::optional<FontMetrics> GetFontMetrics(std::wstring const& family, bool bold, bool italic)
     {
         com_ptr<IDWriteFactory> factory;
         com_ptr<IDWriteFontCollection> collection;
@@ -204,22 +210,20 @@ namespace
         {
             return std::nullopt;
         }
+        FontMetrics result;
         auto font1 = font.try_as<IDWriteFont1>();
-        if (!font1 || !font1->IsMonospacedFont())
-        {
-            return std::nullopt;
-        }
+        result.Monospaced = font1 && font1->IsMonospacedFont();
 
         DWRITE_FONT_METRICS metrics{};
         face->GetMetrics(&metrics);
-        UINT32 codePoint = L'0';
+        UINT32 codePoint = L' ';
         UINT16 glyph = 0;
         DWRITE_GLYPH_METRICS glyphMetrics{};
-        if (FAILED(face->GetGlyphIndices(&codePoint, 1, &glyph)) || FAILED(face->GetDesignGlyphMetrics(&glyph, 1, &glyphMetrics, FALSE)) || metrics.designUnitsPerEm == 0)
+        if (SUCCEEDED(face->GetGlyphIndices(&codePoint, 1, &glyph)) && SUCCEEDED(face->GetDesignGlyphMetrics(&glyph, 1, &glyphMetrics, FALSE)) && metrics.designUnitsPerEm != 0)
         {
-            return std::nullopt;
+            result.SpaceAdvance = static_cast<double>(glyphMetrics.advanceWidth) / metrics.designUnitsPerEm;
         }
-        return static_cast<double>(glyphMetrics.advanceWidth) / metrics.designUnitsPerEm;
+        return result;
     }
 
     bool IsSpace(wchar_t c)
@@ -586,12 +590,14 @@ namespace winrt::MyNotepad::implementation
         Closed([this](auto&&, auto&&) { SaveSettings(); });
 
         LoadSettings();
+        UpdateFontMetrics();
         WordWrapItem().IsChecked(m_wordWrap);
         StatusBarItem().IsChecked(m_statusBarVisible);
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
         AddZoomAccelerators();
         m_languageErrors = syntax::LoadLanguages(LanguageFolders());
         BuildLanguageMenus();
+        BuildIndentMenus();
         ShowWhitespaceItem().IsChecked(m_showWhitespace);
         UpdateWhitespaceAvailability();
 
@@ -794,7 +800,7 @@ namespace winrt::MyNotepad::implementation
             // Insert tabs ourselves instead of letting Tab move focus.
             if (key == VK_TAB && !ctrl && !shift && !alt)
             {
-                InsertText(sender.as<RichEditBox>(), L"\t");
+                InsertTab(sender.as<RichEditBox>());
                 e.Handled(true);
                 return;
             }
@@ -1412,6 +1418,13 @@ namespace winrt::MyNotepad::implementation
         ApplyFont(defaultFormat);
         defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain, IsDarkTheme()));
         document.SetDefaultCharacterFormat(defaultFormat);
+        // Tab stops every m_tabWidth spaces, in points (the font size is in points too). RichEditBox
+        // paragraphs also carry an explicit stop at half an inch, which would come first, so clear it.
+        document.DefaultTabStop(static_cast<float>(m_tabWidth * m_spaceAdvance * m_fontPoints * m_zoom / 100.0));
+        auto defaultParagraph = document.GetDefaultParagraphFormat();
+        defaultParagraph.ClearAllTabs();
+        document.SetDefaultParagraphFormat(defaultParagraph);
+        document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).ParagraphFormat().ClearAllTabs();
         ApplyFont(document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).CharacterFormat());
         ScheduleRepaint(doc); // a font or zoom change can bring more text into view
     }
@@ -1640,8 +1653,7 @@ namespace winrt::MyNotepad::implementation
     void MainWindow::UpdateWhitespaceAvailability()
     {
         // Markers are placed by column, which needs a monospaced font and unwrapped lines.
-        m_monospacedAdvance = MonospacedAdvance(m_fontFamily, m_fontBold, m_fontItalic);
-        bool available = m_monospacedAdvance.has_value() && !m_wordWrap;
+        bool available = m_fontMonospaced && !m_wordWrap;
         ShowWhitespaceItem().IsEnabled(available);
         ToolTipService::SetToolTip(ShowWhitespaceItem(), available ? nullptr : box_value(L"Needs a monospaced font with word wrap off"));
         UpdateWhitespaceOverlay();
@@ -1653,7 +1665,7 @@ namespace winrt::MyNotepad::implementation
         overlay.Children().Clear();
 
         auto doc = CurrentDocument();
-        if (!m_showWhitespace || m_wordWrap || !m_monospacedAdvance || !doc || !doc->ScrollViewer)
+        if (!m_showWhitespace || m_wordWrap || !m_fontMonospaced || !doc || !doc->ScrollViewer)
         {
             return;
         }
@@ -1668,8 +1680,28 @@ namespace winrt::MyNotepad::implementation
         // a character's position follows from its line and column.
         auto text = EditorText(doc->Editor);
         int lineCount = LineCount(text);
+        // When the text is taller than the view, the scroll extent is exactly its height. Otherwise the
+        // extent is just the view's height, so ask RichEdit where the first and last lines are instead.
+        // (Its rectangles are rounded, so a span of lines is more accurate than one line's height.)
         double lineHeight = viewer.ExtentHeight() / lineCount;
-        double charWidth = *m_monospacedAdvance * m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0;
+        if (viewer.ExtentHeight() <= viewer.ViewportHeight() + 0.5)
+        {
+            try
+            {
+                auto document = doc->Editor.Document();
+                Windows::Foundation::Rect first{};
+                Windows::Foundation::Rect last{};
+                int hit = 0;
+                document.GetRange(0, 1).GetRect(PointOptions::ClientCoordinates, first, hit);
+                int lastLineStart = IndexOfLine(text, lineCount);
+                document.GetRange(lastLineStart, lastLineStart + 1).GetRect(PointOptions::ClientCoordinates, last, hit);
+                lineHeight = lineCount > 1 && last.Y > first.Y ? (last.Y - first.Y) / (lineCount - 1.0) : first.Height;
+            }
+            catch (hresult_error const&)
+            {
+            }
+        }
+        double charWidth = m_spaceAdvance * m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0;
         double tabWidth = doc->Editor.Document().DefaultTabStop() * 96.0 / 72.0;
         if (lineHeight <= 0 || charWidth <= 0)
         {
@@ -1754,6 +1786,108 @@ namespace winrt::MyNotepad::implementation
         path.Stroke(brush);
         path.StrokeThickness(1);
         overlay.Children().Append(path);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Tabs and indentation
+    // ---------------------------------------------------------------------------------------------
+
+    void MainWindow::UpdateFontMetrics()
+    {
+        auto metrics = GetFontMetrics(m_fontFamily, m_fontBold, m_fontItalic).value_or(FontMetrics{});
+        m_fontMonospaced = metrics.Monospaced;
+        m_spaceAdvance = metrics.SpaceAdvance;
+    }
+
+    void MainWindow::InsertTab(RichEditBox const& editor)
+    {
+        if (!m_insertSpaces)
+        {
+            InsertText(editor, L"\t");
+            return;
+        }
+
+        // Insert spaces up to the next multiple of the indent size, counting a tab as reaching the
+        // next multiple of the tab width, so indentation lines up with the existing text.
+        auto text = EditorText(editor);
+        size_t caret = std::min(static_cast<size_t>(std::max(SelectionStart(editor), 0)), text.size());
+        size_t lineStart = text.find_last_of(L'\r', caret == 0 ? 0 : caret - 1);
+        lineStart = lineStart == std::wstring::npos || caret == 0 ? 0 : lineStart + 1;
+        int column = 0;
+        for (size_t i = lineStart; i < caret; ++i)
+        {
+            column = text[i] == L'\t' ? (column / m_tabWidth + 1) * m_tabWidth : column + 1;
+        }
+        InsertText(editor, std::wstring(static_cast<size_t>(m_indentSize - column % m_indentSize), L' '));
+    }
+
+    void MainWindow::SetIndentation(bool insertSpaces, int indentSize, int tabWidth)
+    {
+        bool tabWidthChanged = tabWidth != m_tabWidth;
+        m_insertSpaces = insertSpaces;
+        m_indentSize = std::clamp(indentSize, 1, 8);
+        m_tabWidth = std::clamp(tabWidth, 1, 8);
+        if (tabWidthChanged)
+        {
+            ApplyEditorSettingsToAll(); // sets each editor's tab stops
+        }
+        UpdateIndentUI();
+        SaveSettings();
+        if (auto doc = CurrentDocument())
+        {
+            FocusEditor(doc);
+        }
+    }
+
+    void MainWindow::BuildIndentMenus()
+    {
+        // The same menu appears under Format > Tabs and on the status bar button.
+        auto build = [this](Collections::IVector<MenuFlyoutItemBase> const& items, std::wstring const& group)
+        {
+            for (bool spaces : { false, true })
+            {
+                RadioMenuFlyoutItem item;
+                item.Text(spaces ? L"Indent using spaces" : L"Indent using tabs");
+                item.GroupName(group + L"Kind");
+                item.Click([this, spaces](auto&&, auto&&) { SetIndentation(spaces, m_indentSize, m_tabWidth); });
+                m_indentMenuUpdaters.push_back([this, item, spaces] { item.IsChecked(m_insertSpaces == spaces); });
+                items.Append(item);
+            }
+            items.Append(MenuFlyoutSeparator{});
+
+            for (bool indent : { true, false })
+            {
+                MenuFlyoutSubItem sizes;
+                sizes.Text(indent ? L"Indent size (spaces)" : L"Tab width");
+                for (int n = 1; n <= 8; ++n)
+                {
+                    RadioMenuFlyoutItem item;
+                    item.Text(to_hstring(n));
+                    item.GroupName(group + (indent ? L"Size" : L"Width"));
+                    item.Click([this, n, indent](auto&&, auto&&)
+                    {
+                        SetIndentation(m_insertSpaces, indent ? n : m_indentSize, indent ? m_tabWidth : n);
+                    });
+                    m_indentMenuUpdaters.push_back([this, item, n, indent] { item.IsChecked((indent ? m_indentSize : m_tabWidth) == n); });
+                    sizes.Items().Append(item);
+                }
+                items.Append(sizes);
+            }
+        };
+        build(TabsMenu().Items(), L"TabsMenu");
+        build(IndentFlyout().Items(), L"IndentStatus");
+        UpdateIndentUI();
+    }
+
+    void MainWindow::UpdateIndentUI()
+    {
+        for (auto const& update : m_indentMenuUpdaters)
+        {
+            update();
+        }
+        IndentButton().Content(box_value(hstring{ m_insertSpaces
+            ? std::format(L"Spaces: {}", m_indentSize)
+            : std::format(L"Tab width: {}", m_tabWidth) }));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -2344,6 +2478,7 @@ namespace winrt::MyNotepad::implementation
         m_fontBold = style >= 2;
         m_fontItalic = style % 2 == 1;
         m_fontPoints = readSize();
+        UpdateFontMetrics();
         ApplyEditorSettingsToAll();
         UpdateWhitespaceAvailability();
         SaveSettings();
@@ -2417,6 +2552,9 @@ namespace winrt::MyNotepad::implementation
         m_fontBold = GetPrivateProfileIntW(L"Editor", L"Bold", 0, path.c_str()) != 0;
         m_fontItalic = GetPrivateProfileIntW(L"Editor", L"Italic", 0, path.c_str()) != 0;
         m_wordWrap = GetPrivateProfileIntW(L"Editor", L"WordWrap", 0, path.c_str()) != 0;
+        m_insertSpaces = GetPrivateProfileIntW(L"Editor", L"InsertSpaces", 0, path.c_str()) != 0;
+        m_indentSize = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"IndentSize", 4, path.c_str())), 1, 8);
+        m_tabWidth = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"TabWidth", 8, path.c_str())), 1, 8);
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
         m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
     }
@@ -2434,6 +2572,9 @@ namespace winrt::MyNotepad::implementation
         WritePrivateProfileStringW(L"Editor", L"Bold", m_fontBold ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"Editor", L"Italic", m_fontItalic ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"Editor", L"WordWrap", m_wordWrap ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"InsertSpaces", m_insertSpaces ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"IndentSize", std::to_wstring(m_indentSize).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"TabWidth", std::to_wstring(m_tabWidth).c_str(), path.c_str());
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
     }

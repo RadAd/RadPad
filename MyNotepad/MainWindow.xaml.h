@@ -103,6 +103,14 @@ namespace winrt::MyNotepad::implementation
         // Visible whitespace
         void UpdateWhitespaceOverlay();
         void UpdateWhitespaceAvailability();
+
+        // Tabs and indentation
+        void UpdateFontMetrics();
+        void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        void BuildIndentMenus();
+        void UpdateIndentUI();
+        void SetIndentation(bool insertSpaces, int indentSize, int tabWidth);
+        std::vector<std::function<void()>> m_indentMenuUpdaters; // refresh the check marks in the indentation menus
         void BuildLanguageMenus();
 
         // Window lifetime
@@ -157,7 +165,11 @@ namespace winrt::MyNotepad::implementation
         bool m_statusBarVisible{ true };
         bool m_showWhitespace{ false };
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
-        std::optional<double> m_monospacedAdvance; // character width / font size for the editor font, if monospaced
+        bool m_fontMonospaced{ false };    // whether the editor font is monospaced
+        double m_spaceAdvance{ 0.5 };      // width of a space in the editor font, as a fraction of the font size
+        bool m_insertSpaces{ false };      // Tab key inserts spaces rather than a tab
+        int m_indentSize{ 4 };             // spaces per indent level when inserting spaces
+        int m_tabWidth{ 8 };               // width of a tab character, in spaces
         int m_zoom{ 100 };
         bool m_loaded{ false };
         bool m_dialogOpen{ false };
