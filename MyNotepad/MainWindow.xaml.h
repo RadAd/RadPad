@@ -166,6 +166,8 @@ namespace winrt::MyNotepad::implementation
         // Tabs and indentation
         void UpdateFontMetrics();
         void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        bool SelectionSpansLines(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        void ChangeIndent(std::shared_ptr<Document> const& doc, bool outdent);
         void BuildIndentMenus();
         void UpdateIndentUI();
         void SetIndentation(bool insertSpaces, int indentSize, int tabWidth);

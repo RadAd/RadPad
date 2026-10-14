@@ -864,7 +864,7 @@ namespace winrt::MyNotepad::implementation
             e.Handled(true);
             PasteAsync(weakDoc);
         });
-        editor.PreviewKeyDown([this, weakDoc](IInspectable const& sender, KeyRoutedEventArgs const& e)
+        editor.PreviewKeyDown([this, weakDoc](IInspectable const&, KeyRoutedEventArgs const& e)
         {
             bool ctrl = IsKeyDown(VK_CONTROL);
             bool shift = IsKeyDown(VK_SHIFT);
@@ -872,10 +872,18 @@ namespace winrt::MyNotepad::implementation
             int key = static_cast<int>(e.Key());
             auto d = weakDoc.lock();
 
-            // Insert tabs ourselves instead of letting Tab move focus.
-            if (key == VK_TAB && !ctrl && !shift && !alt)
+            // Insert tabs ourselves instead of letting Tab move focus. With several lines selected, Tab
+            // indents them; Shift+Tab outdents the selected lines, or the current line.
+            if (key == VK_TAB && !ctrl && !alt && d)
             {
-                InsertTab(sender.as<RichEditBox>());
+                if (shift || SelectionSpansLines(d->Editor))
+                {
+                    ChangeIndent(d, shift);
+                }
+                else
+                {
+                    InsertTab(d->Editor);
+                }
                 e.Handled(true);
                 return;
             }
@@ -2369,6 +2377,103 @@ namespace winrt::MyNotepad::implementation
             column = text[i] == L'\t' ? (column / m_tabWidth + 1) * m_tabWidth : column + 1;
         }
         InsertText(editor, std::wstring(static_cast<size_t>(m_indentSize - column % m_indentSize), L' '));
+    }
+
+    bool MainWindow::SelectionSpansLines(RichEditBox const& editor)
+    {
+        auto selection = editor.Document().Selection();
+        int start = selection.StartPosition();
+        int end = selection.EndPosition();
+        if (end <= start)
+        {
+            return false;
+        }
+        auto text = EditorText(editor);
+        end = std::min(end, static_cast<int>(text.size()));
+        return std::find(text.begin() + std::min(start, end), text.begin() + end, L'\r') != text.begin() + end;
+    }
+
+    void MainWindow::ChangeIndent(std::shared_ptr<Document> const& doc, bool outdent)
+    {
+        // Indents or outdents whole lines: those the selection touches, or the caret's line. A selection
+        // ending at the very start of a line doesn't include that line.
+        auto editor = doc->Editor;
+        auto text = EditorText(editor);
+        auto selection = editor.Document().Selection();
+        auto size = text.size();
+        size_t start = std::min(static_cast<size_t>(std::max(selection.StartPosition(), 0)), size);
+        size_t end = std::min(static_cast<size_t>(std::max(selection.EndPosition(), 0)), size);
+        bool hadSelection = end > start;
+        size_t last = hadSelection && text[end - 1] == L'\r' ? end - 1 : end;
+
+        size_t blockStart = start == 0 ? std::wstring::npos : text.find_last_of(L'\r', start - 1);
+        blockStart = blockStart == std::wstring::npos ? 0 : blockStart + 1;
+        size_t blockEnd = std::min(text.find(L'\r', last), size);
+
+        // One level of indentation: what Tab inserts at the start of a line, and what Shift+Tab removes
+        // (a tab, or up to that many columns of spaces).
+        std::wstring unit = m_insertSpaces ? std::wstring(static_cast<size_t>(m_indentSize), L' ') : L"\t";
+        size_t columns = static_cast<size_t>(m_insertSpaces ? m_indentSize : m_tabWidth);
+
+        std::wstring block;
+        size_t removedBeforeCaret = 0; // for keeping the caret in place when outdenting one line
+        for (size_t lineStart = blockStart; lineStart <= blockEnd;)
+        {
+            size_t lineEnd = std::min(text.find(L'\r', lineStart), blockEnd);
+            std::wstring_view line{ text.data() + lineStart, lineEnd - lineStart };
+            if (outdent)
+            {
+                size_t remove = 0;
+                if (!line.empty() && line[0] == L'\t')
+                {
+                    remove = 1;
+                }
+                else
+                {
+                    while (remove < line.size() && remove < columns && line[remove] == L' ')
+                    {
+                        ++remove;
+                    }
+                }
+                if (lineStart == blockStart)
+                {
+                    removedBeforeCaret = std::min(remove, start - lineStart);
+                }
+                block += line.substr(remove);
+            }
+            else
+            {
+                if (!line.empty()) // don't leave whitespace on empty lines
+                {
+                    block += unit;
+                }
+                block += line;
+            }
+            if (lineEnd >= blockEnd)
+            {
+                break;
+            }
+            block += L'\r';
+            lineStart = lineEnd + 1;
+        }
+
+        if (block != std::wstring_view{ text.data() + blockStart, blockEnd - blockStart })
+        {
+            doc->StartNewUndoRecord = true; // its own undo step
+            Select(editor, static_cast<int>(blockStart), static_cast<int>(blockEnd - blockStart));
+            InsertText(editor, block);
+            doc->StartNewUndoRecord = true;
+        }
+
+        if (hadSelection)
+        {
+            // Keep the lines selected, so Tab can be pressed again.
+            Select(editor, static_cast<int>(blockStart), static_cast<int>(block.size()));
+        }
+        else
+        {
+            Select(editor, static_cast<int>(start - removedBeforeCaret), 0);
+        }
     }
 
     void MainWindow::SetIndentation(bool insertSpaces, int indentSize, int tabWidth)
