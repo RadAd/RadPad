@@ -303,6 +303,34 @@ namespace
         return directory + L"\\settings.ini";
     }
 
+    // %LOCALAPPDATA%\MyNotepad\Languages: language definitions added or customised by the user.
+    std::wstring UserLanguageFolder()
+    {
+        PWSTR folder = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &folder)))
+        {
+            return {};
+        }
+        std::wstring path = std::wstring(folder) + L"\\MyNotepad\\Languages";
+        CoTaskMemFree(folder);
+        return path;
+    }
+
+    // Where language definitions are loaded from: the Languages folder installed beside the exe, then
+    // the user's folder, whose definitions override installed ones with the same name.
+    std::vector<std::wstring> LanguageFolders()
+    {
+        std::wstring exe(MAX_PATH, L'\0');
+        DWORD length = 0;
+        while ((length = GetModuleFileNameW(nullptr, exe.data(), static_cast<DWORD>(exe.size()))) == exe.size())
+        {
+            exe.resize(exe.size() * 2);
+        }
+        exe.resize(length);
+        std::wstring appFolder = exe.substr(0, exe.find_last_of(L'\\'));
+        return { appFolder + L"\\Languages", UserLanguageFolder() };
+    }
+
     std::vector<std::wstring> GetSystemFontFamilies()
     {
         std::vector<std::wstring> families;
@@ -510,6 +538,7 @@ namespace winrt::MyNotepad::implementation
         StatusBarItem().IsChecked(m_statusBarVisible);
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
         AddZoomAccelerators();
+        m_languageErrors = syntax::LoadLanguages(LanguageFolders());
         BuildLanguageMenus();
         ShowWhitespaceItem().IsChecked(m_showWhitespace);
         UpdateWhitespaceAvailability();
@@ -558,6 +587,10 @@ namespace winrt::MyNotepad::implementation
         if (m_documents.empty())
         {
             CreateDocument();
+        }
+        if (!m_languageErrors.empty())
+        {
+            ShowLanguageErrors();
         }
     }
 
@@ -900,7 +933,7 @@ namespace winrt::MyNotepad::implementation
         UpdateDocumentState(doc);
 
         // Saving under a new name switches to its extension's language, unless that would turn highlighting off.
-        if (auto language = syntax::LanguageFromPath(path); pathChanged && language != syntax::Language::PlainText && language != doc->Language)
+        if (auto language = syntax::LanguageFromPath(path); pathChanged && language != syntax::PlainText && language != doc->Language)
         {
             SetLanguage(doc, language);
         }
@@ -1120,6 +1153,8 @@ namespace winrt::MyNotepad::implementation
         if (command == L"GoTo") { GoToLineAsync(); return; }
         if (command == L"Font") { ChooseFontAsync(); return; }
         if (command == L"About") { ShowAboutAsync(); return; }
+        if (command == L"ReloadLanguages") { ReloadLanguages(); return; }
+        if (command == L"OpenLanguageFolder") { OpenLanguageFolder(); return; }
         if (command == L"ZoomIn") { SetZoom(m_zoom + ZoomStep); return; }
         if (command == L"ZoomOut") { SetZoom(m_zoom - ZoomStep); return; }
         if (command == L"ZoomReset") { SetZoom(DefaultZoom); return; }
@@ -1746,7 +1781,7 @@ namespace winrt::MyNotepad::implementation
         doc->StartNewUndoRecord = true;
     }
 
-    void MainWindow::SetLanguage(std::shared_ptr<Document> const& doc, syntax::Language language)
+    void MainWindow::SetLanguage(std::shared_ptr<Document> const& doc, syntax::LanguageId language)
     {
         doc->Language = language;
         UpdateHighlighting(doc, false);
@@ -1760,17 +1795,18 @@ namespace winrt::MyNotepad::implementation
     {
         auto build = [this](Collections::IVector<MenuFlyoutItemBase> const& items, hstring const& group)
         {
-            for (int i = 0; i < syntax::LanguageCount; ++i)
+            items.Clear();
+            for (int i = 0; i < syntax::LanguageCount(); ++i)
             {
                 RadioMenuFlyoutItem item;
-                item.Text(syntax::LanguageName(static_cast<syntax::Language>(i)));
+                item.Text(syntax::LanguageName(i));
                 item.Tag(box_value(to_hstring(i)));
                 item.GroupName(group);
                 item.Click([this](IInspectable const& sender, RoutedEventArgs const&)
                 {
                     if (auto doc = CurrentDocument())
                     {
-                        SetLanguage(doc, static_cast<syntax::Language>(TagIndex(sender)));
+                        SetLanguage(doc, TagIndex(sender));
                         FocusEditor(doc);
                     }
                 });
@@ -1783,6 +1819,65 @@ namespace winrt::MyNotepad::implementation
         };
         build(LanguageMenu().Items(), L"LanguageMenu");
         build(LanguageFlyout().Items(), L"LanguageStatus");
+
+        // Commands for people editing the definitions.
+        auto command = [this](wchar_t const* text, wchar_t const* tag)
+        {
+            MenuFlyoutItem item;
+            item.Text(text);
+            item.Tag(box_value(tag));
+            item.Click({ this, &MainWindow::Command_Click });
+            LanguageMenu().Items().Append(item);
+        };
+        LanguageMenu().Items().Append(MenuFlyoutSeparator{});
+        command(L"Open language folder", L"OpenLanguageFolder");
+        command(L"Reload languages", L"ReloadLanguages");
+    }
+
+    void MainWindow::ReloadLanguages()
+    {
+        // Ids can change, so remember each document's language by name.
+        std::vector<std::wstring> names;
+        for (auto const& doc : m_documents)
+        {
+            names.emplace_back(syntax::LanguageName(doc->Language));
+        }
+
+        m_languageErrors = syntax::LoadLanguages(LanguageFolders());
+        BuildLanguageMenus();
+        for (size_t i = 0; i < m_documents.size(); ++i)
+        {
+            m_documents[i]->Language = syntax::FindLanguage(names[i]);
+            UpdateHighlighting(m_documents[i], false);
+        }
+        UpdateStatusBar();
+
+        if (!m_languageErrors.empty())
+        {
+            ShowLanguageErrors();
+        }
+        else
+        {
+            StatusMessageText().Text(std::format(L"Loaded {} languages", syntax::LanguageCount() - 1));
+        }
+    }
+
+    void MainWindow::OpenLanguageFolder()
+    {
+        // The per-user folder, where added and customised definitions go.
+        auto folder = UserLanguageFolder();
+        SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr);
+        ShellExecuteW(WindowHandle(), L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    }
+
+    void MainWindow::ShowLanguageErrors()
+    {
+        std::wstring message = L"These language definitions couldn't be loaded:\n";
+        for (auto const& error : m_languageErrors)
+        {
+            message += L"\n\x2022 " + error;
+        }
+        ShowMessageAsync(L"Language definitions", hstring{ message });
     }
 
     void MainWindow::SetZoom(int zoom)

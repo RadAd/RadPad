@@ -1,0 +1,12 @@
+{
+  "name": "C++",
+  "extensions": ["cpp", "cc", "cxx", "c++", "h", "hpp", "hh", "hxx", "inl", "ipp", "ixx", "idl"],
+  "keywords": "auto break case const continue default do else enum extern for goto if inline register restrict return sizeof static struct switch typedef union volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Noreturn _Static_assert _Thread_local true false NULL alignas alignof and and_eq asm bitand bitor catch class compl concept consteval constexpr constinit const_cast co_await co_return co_yield decltype delete dynamic_cast explicit export final friend import module mutable namespace new noexcept not not_eq nullptr operator or or_eq override private protected public reinterpret_cast requires static_assert static_cast template this thread_local throw try typeid typename using virtual xor xor_eq",
+  "types": "bool char double float int long short signed unsigned void size_t ssize_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t wchar_t FILE char8_t char16_t char32_t",
+  "lineComments": ["//"],
+  "blockComment": ["/*", "*/"],
+  "strings": "\"",
+  "charLiterals": true,
+  "preprocessor": true,
+  "rawStrings": true
+}

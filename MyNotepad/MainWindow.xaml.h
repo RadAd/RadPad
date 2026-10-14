@@ -25,7 +25,7 @@ namespace winrt::MyNotepad::implementation
         textfile::TextEncoding SavedEncoding{ textfile::TextEncoding::Utf8 };
         textfile::LineEnding Eol{ textfile::LineEnding::CRLF };
         textfile::LineEnding SavedEol{ textfile::LineEnding::CRLF };
-        syntax::Language Language{ syntax::Language::PlainText };
+        syntax::LanguageId Language{ syntax::PlainText };
         std::wstring HighlightedText;               // editor text when highlighting was last updated
         std::vector<syntax::TokenKind> AppliedKinds; // colour currently applied to each character of HighlightedText
         std::vector<syntax::TokenKind> DesiredKinds; // the tokenizer's colour for each character of HighlightedText
@@ -95,7 +95,10 @@ namespace winrt::MyNotepad::implementation
         void RecordEdit(std::shared_ptr<Document> const& doc, size_t start, std::wstring removed, std::wstring inserted);
         void UndoOrRedo(std::shared_ptr<Document> const& doc, bool redo);
         void ClearUndoHistory(std::shared_ptr<Document> const& doc);
-        void SetLanguage(std::shared_ptr<Document> const& doc, syntax::Language language);
+        void SetLanguage(std::shared_ptr<Document> const& doc, syntax::LanguageId language);
+        void ReloadLanguages();
+        void OpenLanguageFolder();
+        void ShowLanguageErrors();
 
         // Visible whitespace
         void UpdateWhitespaceOverlay();
@@ -153,6 +156,7 @@ namespace winrt::MyNotepad::implementation
         bool m_wordWrap{ false };
         bool m_statusBarVisible{ true };
         bool m_showWhitespace{ false };
+        std::vector<std::wstring> m_languageErrors; // from loading the language definitions
         std::optional<double> m_monospacedAdvance; // character width / font size for the editor font, if monospaced
         int m_zoom{ 100 };
         bool m_loaded{ false };

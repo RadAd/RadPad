@@ -1,0 +1,7 @@
+{
+  "name": "HTML",
+  "extensions": ["html", "htm", "xhtml"],
+  "tokenizer": "markup",
+  "scriptLanguage": "JavaScript",
+  "styleLanguage": "CSS"
+}

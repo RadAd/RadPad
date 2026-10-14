@@ -1,32 +1,13 @@
 #pragma once
 
-// Syntax highlighting: language detection and a lightweight tokenizer that assigns a token kind
-// to every character. Text uses '\r' as its only line break, as in the editor.
+// Syntax highlighting: language definitions loaded from JSON files, language detection, and a
+// lightweight tokenizer that assigns a token kind to every character. Text uses '\r' as its only
+// line break, as in the editor.
 namespace syntax
 {
-    enum class Language : uint8_t
-    {
-        PlainText,
-        Batch,
-        C,
-        Cpp,
-        CSharp,
-        Css,
-        Go,
-        Html,
-        Ini,
-        Java,
-        JavaScript,
-        Json,
-        PowerShell,
-        Python,
-        Rust,
-        Sql,
-        TypeScript,
-        Xml,
-    };
-
-    constexpr int LanguageCount = 18;
+    // Index into the loaded languages. Plain text is always 0.
+    using LanguageId = int;
+    constexpr LanguageId PlainText = 0;
 
     enum class TokenKind : uint8_t
     {
@@ -47,9 +28,16 @@ namespace syntax
     // Longer documents are shown as plain text to keep typing responsive.
     constexpr size_t MaxHighlightLength = 1'000'000;
 
-    std::wstring_view LanguageName(Language language);
-    Language LanguageFromPath(std::wstring_view path);
+    // Replaces the loaded languages with the *.json definitions in each folder, in order. A definition
+    // with the same name as an earlier one replaces it, so later folders override earlier ones.
+    // Returns a message for each file that couldn't be loaded.
+    std::vector<std::wstring> LoadLanguages(std::vector<std::wstring> const& folders);
+
+    int LanguageCount();
+    std::wstring_view LanguageName(LanguageId language);
+    LanguageId FindLanguage(std::wstring_view name); // PlainText if not found
+    LanguageId LanguageFromPath(std::wstring_view path);
 
     // Resizes kinds to text.size() and sets the token kind of every character.
-    void Classify(Language language, std::wstring_view text, std::vector<TokenKind>& kinds);
+    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds);
 }

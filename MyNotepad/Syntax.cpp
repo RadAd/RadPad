@@ -1,38 +1,83 @@
 #include "pch.h"
 #include "Syntax.h"
+#include "TextFile.h"
 
 #include <cwctype>
+#include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
+#include <winrt/Windows.Data.Json.h>
 
 namespace syntax
 {
     namespace
     {
-        using WordSet = std::unordered_set<std::wstring_view>;
         constexpr size_t npos = std::wstring_view::npos;
 
-        // Builds a set from space-separated word lists. The views point into the string literals.
-        WordSet Words(std::initializer_list<std::wstring_view> lists)
+        // A set of words that can be searched with a wstring_view without allocating.
+        struct WordHash
         {
-            WordSet words;
-            for (auto list : lists)
-            {
-                size_t start = 0;
-                while (start < list.size())
-                {
-                    size_t end = list.find(L' ', start);
-                    if (end == npos)
-                    {
-                        end = list.size();
-                    }
-                    if (end > start)
-                    {
-                        words.insert(list.substr(start, end - start));
-                    }
-                    start = end + 1;
-                }
-            }
-            return words;
+            using is_transparent = void;
+            size_t operator()(std::wstring_view word) const noexcept { return std::hash<std::wstring_view>{}(word); }
+        };
+        using WordSet = std::unordered_set<std::wstring, WordHash, std::equal_to<>>;
+
+        // Which tokenizer a language uses. Code is driven entirely by the definition's rules; the others
+        // are hand-written for formats that rules can't describe.
+        enum class Tokenizer { None, Code, Markup, Css, Batch, Ini };
+
+        // One language, as read from a JSON file in a Languages folder. See README.md for the format.
+        struct LanguageDefinition
+        {
+            std::wstring Name;
+            std::vector<std::wstring> Extensions; // lower case, without the dot
+            std::vector<std::wstring> FileNames;  // whole file names, lower case
+            Tokenizer Kind = Tokenizer::Code;
+            WordSet Keywords;                     // lower case when IgnoreCase
+            WordSet Types;
+            std::vector<std::wstring> LineComments;
+            std::wstring BlockStart;
+            std::wstring BlockEnd;
+            std::wstring Quotes = L"\"";          // delimiters of single-line strings
+            std::wstring MultilineQuotes;         // delimiters of strings that may span lines
+            bool CharLiterals = false;            // ' delimits short character literals
+            wchar_t Escape = L'\\';               // L'\0' for none
+            bool IgnoreCase = false;
+            bool HashDirectives = false;          // # at the start of a line begins a preprocessor directive
+            bool RawStrings = false;              // C++ R"delim(...)delim"
+            bool VerbatimStrings = false;         // C# @"..." with "" as the escape
+            bool TripleQuotes = false;            // Python """...""" and '''...'''
+            bool Annotations = false;             // @name decorators and annotations
+            bool PowerShellSyntax = false;        // $variables, -operators and -Parameters, Verb-Noun commands
+            bool KeysAsProperties = false;        // JSON object keys
+            std::wstring ScriptLanguage;          // markup: language of <script> contents
+            std::wstring StyleLanguage;           // markup: language of <style> contents
+        };
+
+        struct Registry
+        {
+            std::vector<LanguageDefinition> Languages;
+            std::unordered_map<std::wstring, LanguageId> Extensions;
+            std::unordered_map<std::wstring, LanguageId> FileNames;
+        };
+
+        LanguageDefinition MakePlainText()
+        {
+            LanguageDefinition plain;
+            plain.Name = L"Plain text";
+            plain.Kind = Tokenizer::None;
+            return plain;
+        }
+
+        Registry& Languages()
+        {
+            static Registry registry{ { MakePlainText() } };
+            return registry;
+        }
+
+        bool NamesEqual(std::wstring_view a, std::wstring_view b)
+        {
+            return CompareStringOrdinal(a.data(), static_cast<int>(a.size()), b.data(), static_cast<int>(b.size()), TRUE) == CSTR_EQUAL;
         }
 
         std::wstring Lower(std::wstring_view text)
@@ -127,90 +172,11 @@ namespace syntax
             }
         };
 
-        void ClassifyInto(Language language, std::wstring_view text, TokenKind* kinds);
+        void ClassifyInto(LanguageDefinition const& language, std::wstring_view text, TokenKind* kinds);
 
         // -----------------------------------------------------------------------------------------
-        // C-like and scripting languages, driven by a table of language rules
+        // C-like and scripting languages, driven by the definition's rules
         // -----------------------------------------------------------------------------------------
-
-        struct CodeLanguage
-        {
-            WordSet Keywords;
-            WordSet Types;
-            std::wstring_view LineComment;
-            std::wstring_view LineComment2;
-            std::wstring_view BlockStart;
-            std::wstring_view BlockEnd;
-            std::wstring_view Quotes;          // delimiters of single-line strings
-            std::wstring_view MultilineQuotes; // delimiters of strings that may span lines
-            bool CharLiterals = false;         // ' delimits short character literals
-            wchar_t Escape = L'\\';            // L'\0' for none
-            bool IgnoreCase = false;           // keyword and type lists are lower case
-            bool HashDirectives = false;       // # at the start of a line begins a preprocessor directive
-            bool RawStrings = false;           // C++ R"delim(...)delim"
-            bool VerbatimStrings = false;      // C# @"..." with "" as the escape
-            bool TripleQuotes = false;         // Python """...""" and '''...'''
-            bool Annotations = false;          // @name decorators and annotations
-            bool PowerShellSyntax = false;     // $variables, -operators and -Parameters, Verb-Noun commands
-            bool KeysAsProperties = false;     // JSON object keys
-        };
-
-        constexpr std::wstring_view CKeywords = L"auto break case const continue default do else enum extern for goto if inline register restrict return sizeof static struct switch typedef union volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Noreturn _Static_assert _Thread_local true false NULL";
-        constexpr std::wstring_view CTypes = L"bool char double float int long short signed unsigned void size_t ssize_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t wchar_t FILE";
-        constexpr std::wstring_view CppKeywords = L"alignas alignof and and_eq asm bitand bitor catch class compl concept consteval constexpr constinit const_cast co_await co_return co_yield decltype delete dynamic_cast explicit export final friend import module mutable namespace new noexcept not not_eq nullptr operator or or_eq override private protected public reinterpret_cast requires static_assert static_cast template this thread_local throw try typeid typename using virtual xor xor_eq";
-        constexpr std::wstring_view CppTypes = L"char8_t char16_t char32_t";
-        constexpr std::wstring_view CSharpKeywords = L"abstract as base break case catch checked class const continue default delegate do else enum event explicit extern false finally fixed for foreach goto if implicit in interface internal is lock namespace new null operator out override params private protected public readonly ref return sealed sizeof stackalloc static struct switch this throw true try typeof unchecked unsafe using virtual volatile while add and async await by descending equals from get global group init into join let managed nameof not on or orderby partial record remove required select set unmanaged value var when where with yield";
-        constexpr std::wstring_view CSharpTypes = L"bool byte char decimal double dynamic float int long nint nuint object sbyte short string uint ulong ushort void";
-        constexpr std::wstring_view JavaKeywords = L"abstract assert break case catch class const continue default do else enum extends final finally for goto if implements import instanceof interface native new package permits private protected public record return sealed static strictfp super switch synchronized this throw throws transient try var volatile while yield true false null";
-        constexpr std::wstring_view JavaTypes = L"boolean byte char double float int long short void Boolean Byte Character Double Float Integer Long Object Short String";
-        constexpr std::wstring_view JavaScriptKeywords = L"async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while with yield true false null undefined NaN Infinity";
-        constexpr std::wstring_view JavaScriptTypes = L"Array ArrayBuffer BigInt Boolean Date Error Function JSON Map Math Number Object Promise Proxy Reflect RegExp Set String Symbol WeakMap WeakSet console document globalThis window";
-        constexpr std::wstring_view TypeScriptKeywords = L"abstract as asserts declare enum implements infer interface is keyof namespace never override private protected public readonly satisfies type unique";
-        constexpr std::wstring_view TypeScriptTypes = L"any bigint boolean number object string symbol unknown void";
-        constexpr std::wstring_view PythonKeywords = L"False None True and as assert async await break case class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield self cls";
-        constexpr std::wstring_view PythonTypes = L"bool bytearray bytes complex dict float frozenset int list object range set str tuple type Exception abs all any enumerate filter isinstance len map max min open print sorted sum super zip";
-        constexpr std::wstring_view RustKeywords = L"as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type union unsafe use where while macro_rules";
-        constexpr std::wstring_view RustTypes = L"bool char f32 f64 i8 i16 i32 i64 i128 isize str u8 u16 u32 u64 u128 usize Box Err None Ok Option Result Some String Vec";
-        constexpr std::wstring_view GoKeywords = L"break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var true false nil iota";
-        constexpr std::wstring_view GoTypes = L"any bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr append cap close copy delete len make new panic print println recover";
-        constexpr std::wstring_view SqlKeywords = L"add all alter and any as asc avg begin between by cascade case cast check coalesce column commit constraint convert count create cross database declare default delete desc distinct drop else end exec execute exists fetch foreign from full function go grant group having if in index inner insert intersect into is join key left like limit max merge min not null offset on or order outer over partition primary procedure references return returns revoke right rollback rows select set sum table then top transaction trigger truncate union unique update use values view when where while with";
-        constexpr std::wstring_view SqlTypes = L"bigint binary bit blob boolean char date datetime datetime2 datetimeoffset decimal double float int integer money nchar ntext numeric nvarchar real serial smallint text time timestamp tinyint uniqueidentifier uuid varbinary varchar xml";
-        constexpr std::wstring_view PowerShellKeywords = L"begin break catch class continue data do dynamicparam else elseif end enum exit filter finally for foreach function if in param process return switch throw trap try until using while -and -as -band -bnot -bor -bxor -contains -eq -f -ge -gt -in -is -isnot -join -le -like -lt -match -ne -not -notcontains -notin -notlike -notmatch -or -replace -shl -shr -split -xor";
-        constexpr std::wstring_view PowerShellTypes = L"array bool byte char datetime decimal double hashtable int int32 int64 long object pscustomobject psobject regex scriptblock string switch void xml";
-        constexpr std::wstring_view JsonKeywords = L"true false null";
-
-        CodeLanguage const* FindCodeLanguage(Language language)
-        {
-            static const CodeLanguage c{ .Keywords = Words({ CKeywords }), .Types = Words({ CTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .CharLiterals = true, .HashDirectives = true };
-            static const CodeLanguage cpp{ .Keywords = Words({ CKeywords, CppKeywords }), .Types = Words({ CTypes, CppTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .CharLiterals = true, .HashDirectives = true, .RawStrings = true };
-            static const CodeLanguage csharp{ .Keywords = Words({ CSharpKeywords }), .Types = Words({ CSharpTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .CharLiterals = true, .HashDirectives = true, .VerbatimStrings = true };
-            static const CodeLanguage java{ .Keywords = Words({ JavaKeywords }), .Types = Words({ JavaTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .CharLiterals = true, .Annotations = true };
-            static const CodeLanguage javascript{ .Keywords = Words({ JavaScriptKeywords }), .Types = Words({ JavaScriptTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"'", .MultilineQuotes = L"`", .Annotations = true };
-            static const CodeLanguage typescript{ .Keywords = Words({ JavaScriptKeywords, TypeScriptKeywords }), .Types = Words({ JavaScriptTypes, TypeScriptTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"'", .MultilineQuotes = L"`", .Annotations = true };
-            static const CodeLanguage python{ .Keywords = Words({ PythonKeywords }), .Types = Words({ PythonTypes }), .LineComment = L"#", .Quotes = L"\"'", .TripleQuotes = true, .Annotations = true };
-            static const CodeLanguage rust{ .Keywords = Words({ RustKeywords }), .Types = Words({ RustTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .MultilineQuotes = L"\"", .CharLiterals = true };
-            static const CodeLanguage go{ .Keywords = Words({ GoKeywords }), .Types = Words({ GoTypes }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .MultilineQuotes = L"`", .CharLiterals = true };
-            static const CodeLanguage sql{ .Keywords = Words({ SqlKeywords }), .Types = Words({ SqlTypes }), .LineComment = L"--", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"'\"", .Escape = L'\0', .IgnoreCase = true };
-            static const CodeLanguage powershell{ .Keywords = Words({ PowerShellKeywords }), .Types = Words({ PowerShellTypes }), .LineComment = L"#", .BlockStart = L"<#", .BlockEnd = L"#>", .MultilineQuotes = L"\"'", .Escape = L'`', .IgnoreCase = true, .PowerShellSyntax = true };
-            static const CodeLanguage json{ .Keywords = Words({ JsonKeywords }), .LineComment = L"//", .BlockStart = L"/*", .BlockEnd = L"*/", .Quotes = L"\"", .KeysAsProperties = true };
-
-            switch (language)
-            {
-            case Language::C: return &c;
-            case Language::Cpp: return &cpp;
-            case Language::CSharp: return &csharp;
-            case Language::Java: return &java;
-            case Language::JavaScript: return &javascript;
-            case Language::TypeScript: return &typescript;
-            case Language::Python: return &python;
-            case Language::Rust: return &rust;
-            case Language::Go: return &go;
-            case Language::Sql: return &sql;
-            case Language::PowerShell: return &powershell;
-            case Language::Json: return &json;
-            default: return nullptr;
-            }
-        }
 
         // A #directive line: colours the directive and an #include <file> name; returns where scanning resumes.
         size_t ScanDirective(Scanner const& s, size_t i)
@@ -272,7 +238,12 @@ namespace syntax
             return npos;
         }
 
-        void ClassifyCode(CodeLanguage const& lang, Scanner const& s)
+        bool StartsLineComment(LanguageDefinition const& lang, Scanner const& s, size_t i)
+        {
+            return std::any_of(lang.LineComments.begin(), lang.LineComments.end(), [&](auto const& marker) { return s.StartsWith(i, marker); });
+        }
+
+        void ClassifyCode(LanguageDefinition const& lang, Scanner const& s)
         {
             auto const text = s.Text;
             size_t const n = text.size();
@@ -301,7 +272,7 @@ namespace syntax
                     i = end;
                     continue;
                 }
-                if (s.StartsWith(i, lang.LineComment) || s.StartsWith(i, lang.LineComment2))
+                if (StartsLineComment(lang, s, i))
                 {
                     size_t end = s.LineEnd(i);
                     s.Fill(i, end, TokenKind::Comment);
@@ -491,7 +462,7 @@ namespace syntax
         bool IsNameStart(wchar_t c) { return std::iswalpha(c) || c == L'_' || c == L':'; }
         bool IsNameChar(wchar_t c) { return std::iswalnum(c) || c == L'_' || c == L':' || c == L'-' || c == L'.'; }
 
-        void ClassifyMarkup(Scanner const& s, bool html)
+        void ClassifyMarkup(Scanner const& s, LanguageDefinition const& lang)
         {
             auto const text = s.Text;
             size_t const n = text.size();
@@ -611,11 +582,12 @@ namespace syntax
                 }
                 i = j;
 
-                // Colour the contents of HTML <script> and <style> elements as JavaScript and CSS.
-                if (html && !closing && !selfClosing && (name == L"script" || name == L"style"))
+                // Colour the contents of <script> and <style> elements in the languages the definition names.
+                auto const& embedded = name == L"script" ? lang.ScriptLanguage : name == L"style" ? lang.StyleLanguage : std::wstring{};
+                if (!closing && !selfClosing && !embedded.empty())
                 {
                     size_t end = FindIgnoreCase(text, L"</" + name, i);
-                    ClassifyInto(name == L"script" ? Language::JavaScript : Language::Css, text.substr(i, end - i), s.Kinds + i);
+                    ClassifyInto(Languages().Languages[FindLanguage(embedded)], text.substr(i, end - i), s.Kinds + i);
                     i = end;
                 }
             }
@@ -749,10 +721,8 @@ namespace syntax
         // Batch files
         // -----------------------------------------------------------------------------------------
 
-        void ClassifyBatchLine(Scanner const& s, size_t i, size_t lineEnd)
+        void ClassifyBatchLine(Scanner const& s, WordSet const& keywords, size_t i, size_t lineEnd)
         {
-            static const WordSet keywords = Words({ L"call cd chdir choice cls copy defined del do echo else endlocal enabledelayedexpansion enableextensions equ erase errorlevel exist exit for geq goto gtr if in leq lss md mkdir move neq not nul off on pause popd pushd rd ren rename rmdir set setlocal shift start title type" });
-
             auto const text = s.Text;
             while (i < lineEnd)
             {
@@ -832,7 +802,7 @@ namespace syntax
             }
         }
 
-        void ClassifyBatch(Scanner const& s)
+        void ClassifyBatch(Scanner const& s, LanguageDefinition const& lang)
         {
             auto const text = s.Text;
             size_t i = 0;
@@ -860,7 +830,7 @@ namespace syntax
                 }
                 else
                 {
-                    ClassifyBatchLine(s, j, lineEnd);
+                    ClassifyBatchLine(s, lang.Keywords, j, lineEnd);
                 }
                 i = lineEnd + 1;
             }
@@ -908,102 +878,329 @@ namespace syntax
             }
         }
 
-        void ClassifyInto(Language language, std::wstring_view text, TokenKind* kinds)
+        void ClassifyInto(LanguageDefinition const& language, std::wstring_view text, TokenKind* kinds)
         {
             Scanner s{ text, kinds };
-            switch (language)
+            switch (language.Kind)
             {
-            case Language::PlainText:
+            case Tokenizer::None:
                 break;
-            case Language::Batch:
-                ClassifyBatch(s);
+            case Tokenizer::Code:
+                ClassifyCode(language, s);
                 break;
-            case Language::Css:
+            case Tokenizer::Markup:
+                ClassifyMarkup(s, language);
+                break;
+            case Tokenizer::Css:
                 ClassifyCss(s);
                 break;
-            case Language::Html:
-                ClassifyMarkup(s, true);
+            case Tokenizer::Batch:
+                ClassifyBatch(s, language);
                 break;
-            case Language::Xml:
-                ClassifyMarkup(s, false);
-                break;
-            case Language::Ini:
+            case Tokenizer::Ini:
                 ClassifyIni(s);
                 break;
-            default:
-                if (auto lang = FindCodeLanguage(language))
-                {
-                    ClassifyCode(*lang, s);
-                }
-                break;
             }
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Loading definitions from JSON
+        // -----------------------------------------------------------------------------------------
+
+        using winrt::Windows::Data::Json::JsonObject;
+        using winrt::Windows::Data::Json::JsonValueType;
+
+        [[noreturn]] void Invalid(std::wstring const& message)
+        {
+            throw winrt::hresult_invalid_argument(message);
+        }
+
+        std::wstring Quoted(std::wstring_view key)
+        {
+            return L"\"" + std::wstring{ key } + L"\"";
+        }
+
+        std::wstring ReadString(JsonObject const& json, std::wstring_view key, std::wstring fallback = {})
+        {
+            if (!json.HasKey(key))
+            {
+                return fallback;
+            }
+            auto value = json.GetNamedValue(key);
+            if (value.ValueType() != JsonValueType::String)
+            {
+                Invalid(Quoted(key) + L" must be a string");
+            }
+            return std::wstring{ value.GetString() };
+        }
+
+        bool ReadBool(JsonObject const& json, std::wstring_view key)
+        {
+            if (!json.HasKey(key))
+            {
+                return false;
+            }
+            auto value = json.GetNamedValue(key);
+            if (value.ValueType() != JsonValueType::Boolean)
+            {
+                Invalid(Quoted(key) + L" must be true or false");
+            }
+            return value.GetBoolean();
+        }
+
+        // A list of words or markers: an array of strings, or one string of words separated by spaces.
+        std::vector<std::wstring> ReadList(JsonObject const& json, std::wstring_view key)
+        {
+            std::vector<std::wstring> items;
+            if (!json.HasKey(key))
+            {
+                return items;
+            }
+            auto value = json.GetNamedValue(key);
+            if (value.ValueType() == JsonValueType::String)
+            {
+                winrt::hstring all = value.GetString();
+                std::wstring_view words = all;
+                size_t i = 0;
+                while (i < words.size())
+                {
+                    while (i < words.size() && std::iswspace(words[i]))
+                    {
+                        ++i;
+                    }
+                    size_t start = i;
+                    while (i < words.size() && !std::iswspace(words[i]))
+                    {
+                        ++i;
+                    }
+                    if (i > start)
+                    {
+                        items.emplace_back(words.substr(start, i - start));
+                    }
+                }
+            }
+            else if (value.ValueType() == JsonValueType::Array)
+            {
+                for (auto const& item : value.GetArray())
+                {
+                    if (item.ValueType() != JsonValueType::String)
+                    {
+                        Invalid(Quoted(key) + L" must contain only strings");
+                    }
+                    if (!item.GetString().empty())
+                    {
+                        items.emplace_back(item.GetString());
+                    }
+                }
+            }
+            else
+            {
+                Invalid(Quoted(key) + L" must be an array of strings, or a string of words separated by spaces");
+            }
+            return items;
+        }
+
+        LanguageDefinition ParseDefinition(JsonObject const& json)
+        {
+            static constexpr std::pair<std::wstring_view, Tokenizer> tokenizers[] =
+            {
+                { L"code", Tokenizer::Code }, { L"markup", Tokenizer::Markup }, { L"css", Tokenizer::Css },
+                { L"batch", Tokenizer::Batch }, { L"ini", Tokenizer::Ini },
+            };
+
+            LanguageDefinition lang;
+            lang.Name = ReadString(json, L"name");
+            if (lang.Name.empty())
+            {
+                Invalid(L"\"name\" is missing");
+            }
+            if (NamesEqual(lang.Name, MakePlainText().Name))
+            {
+                Invalid(L"\"Plain text\" is built in and can't be redefined");
+            }
+
+            auto tokenizer = Lower(ReadString(json, L"tokenizer", L"code"));
+            auto match = std::find_if(std::begin(tokenizers), std::end(tokenizers), [&](auto const& t) { return t.first == tokenizer; });
+            if (match == std::end(tokenizers))
+            {
+                Invalid(L"\"tokenizer\" must be one of: code, markup, css, batch, ini");
+            }
+            lang.Kind = match->second;
+
+            for (auto const& extension : ReadList(json, L"extensions"))
+            {
+                auto name = Lower(extension);
+                lang.Extensions.push_back(name.starts_with(L'.') ? name.substr(1) : name);
+            }
+            for (auto const& fileName : ReadList(json, L"fileNames"))
+            {
+                lang.FileNames.push_back(Lower(fileName));
+            }
+
+            lang.IgnoreCase = ReadBool(json, L"ignoreCase");
+            for (auto const& word : ReadList(json, L"keywords"))
+            {
+                lang.Keywords.insert(lang.IgnoreCase ? Lower(word) : word);
+            }
+            for (auto const& word : ReadList(json, L"types"))
+            {
+                lang.Types.insert(lang.IgnoreCase ? Lower(word) : word);
+            }
+
+            lang.LineComments = ReadList(json, L"lineComments");
+            auto block = ReadList(json, L"blockComment");
+            if (!block.empty())
+            {
+                if (block.size() != 2)
+                {
+                    Invalid(L"\"blockComment\" must be the start and end markers, such as [\"/*\", \"*/\"]");
+                }
+                lang.BlockStart = block[0];
+                lang.BlockEnd = block[1];
+            }
+
+            lang.Quotes = ReadString(json, L"strings", L"\"");
+            lang.MultilineQuotes = ReadString(json, L"multilineStrings");
+            auto escape = ReadString(json, L"escape", L"\\");
+            if (escape.size() > 1)
+            {
+                Invalid(L"\"escape\" must be a single character, or \"\" for none");
+            }
+            lang.Escape = escape.empty() ? L'\0' : escape[0];
+
+            lang.CharLiterals = ReadBool(json, L"charLiterals");
+            lang.HashDirectives = ReadBool(json, L"preprocessor");
+            lang.RawStrings = ReadBool(json, L"rawStrings");
+            lang.VerbatimStrings = ReadBool(json, L"verbatimStrings");
+            lang.TripleQuotes = ReadBool(json, L"tripleQuotedStrings");
+            lang.Annotations = ReadBool(json, L"annotations");
+            lang.PowerShellSyntax = ReadBool(json, L"powerShellSyntax");
+            lang.KeysAsProperties = ReadBool(json, L"objectKeys");
+            lang.ScriptLanguage = ReadString(json, L"scriptLanguage");
+            lang.StyleLanguage = ReadString(json, L"styleLanguage");
+            return lang;
+        }
+
+        // The *.json files in a folder, in name order. A missing folder has none.
+        std::vector<std::filesystem::path> DefinitionFiles(std::wstring const& folder)
+        {
+            std::vector<std::filesystem::path> files;
+            std::error_code error;
+            for (std::filesystem::directory_iterator it{ folder, error }, end; !error && it != end; it.increment(error))
+            {
+                if (it->is_regular_file(error) && NamesEqual(it->path().extension().native(), L".json"))
+                {
+                    files.push_back(it->path());
+                }
+            }
+            std::sort(files.begin(), files.end());
+            return files;
         }
     }
 
-    std::wstring_view LanguageName(Language language)
+    std::vector<std::wstring> LoadLanguages(std::vector<std::wstring> const& folders)
     {
-        static constexpr std::wstring_view names[LanguageCount] =
+        std::vector<std::wstring> errors;
+        std::vector<LanguageDefinition> loaded{ MakePlainText() };
+        std::vector<std::wstring> loadOrder; // names in the order they were (last) loaded
+
+        for (auto const& folder : folders)
         {
-            L"Plain text", L"Batch", L"C", L"C++", L"C#", L"CSS", L"Go", L"HTML", L"INI",
-            L"Java", L"JavaScript", L"JSON", L"PowerShell", L"Python", L"Rust", L"SQL", L"TypeScript", L"XML",
-        };
-        auto index = static_cast<size_t>(language);
-        return index < LanguageCount ? names[index] : names[0];
+            for (auto const& file : DefinitionFiles(folder))
+            {
+                try
+                {
+                    auto lang = ParseDefinition(JsonObject::Parse(textfile::Load(file.native()).Text));
+                    std::erase_if(loadOrder, [&](auto const& name) { return NamesEqual(name, lang.Name); });
+                    loadOrder.push_back(lang.Name);
+
+                    // A definition with the same name as an earlier one replaces it.
+                    auto existing = std::find_if(loaded.begin(), loaded.end(), [&](auto const& l) { return NamesEqual(l.Name, lang.Name); });
+                    if (existing != loaded.end())
+                    {
+                        *existing = std::move(lang);
+                    }
+                    else
+                    {
+                        loaded.push_back(std::move(lang));
+                    }
+                }
+                catch (winrt::hresult_error const& e)
+                {
+                    errors.push_back(file.native() + L": " + std::wstring{ e.message() });
+                }
+            }
+        }
+
+        // Menus list the languages by name, after Plain text.
+        std::sort(loaded.begin() + 1, loaded.end(), [](auto const& a, auto const& b)
+        {
+            return CompareStringOrdinal(a.Name.c_str(), -1, b.Name.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+        });
+
+        Registry registry;
+        registry.Languages = std::move(loaded);
+        auto const& languages = registry.Languages;
+        for (auto const& name : loadOrder)
+        {
+            // Later definitions win when two claim the same extension or file name.
+            auto id = static_cast<LanguageId>(std::find_if(languages.begin(), languages.end(), [&](auto const& l) { return l.Name == name; }) - languages.begin());
+            for (auto const& extension : languages[id].Extensions)
+            {
+                registry.Extensions[extension] = id;
+            }
+            for (auto const& fileName : languages[id].FileNames)
+            {
+                registry.FileNames[fileName] = id;
+            }
+        }
+        Languages() = std::move(registry);
+        return errors;
     }
 
-    Language LanguageFromPath(std::wstring_view path)
+    int LanguageCount()
     {
-        static constexpr std::pair<std::wstring_view, Language> extensions[] =
-        {
-            { L"bat", Language::Batch }, { L"cmd", Language::Batch },
-            { L"c", Language::C },
-            { L"cpp", Language::Cpp }, { L"cc", Language::Cpp }, { L"cxx", Language::Cpp }, { L"c++", Language::Cpp },
-            { L"h", Language::Cpp }, { L"hpp", Language::Cpp }, { L"hh", Language::Cpp }, { L"hxx", Language::Cpp },
-            { L"inl", Language::Cpp }, { L"ipp", Language::Cpp }, { L"ixx", Language::Cpp }, { L"idl", Language::Cpp },
-            { L"cs", Language::CSharp }, { L"csx", Language::CSharp },
-            { L"css", Language::Css }, { L"scss", Language::Css }, { L"less", Language::Css },
-            { L"go", Language::Go },
-            { L"html", Language::Html }, { L"htm", Language::Html }, { L"xhtml", Language::Html },
-            { L"ini", Language::Ini }, { L"cfg", Language::Ini }, { L"conf", Language::Ini }, { L"inf", Language::Ini },
-            { L"reg", Language::Ini }, { L"properties", Language::Ini }, { L"editorconfig", Language::Ini }, { L"gitconfig", Language::Ini },
-            { L"java", Language::Java },
-            { L"js", Language::JavaScript }, { L"mjs", Language::JavaScript }, { L"cjs", Language::JavaScript }, { L"jsx", Language::JavaScript },
-            { L"json", Language::Json }, { L"jsonc", Language::Json }, { L"webmanifest", Language::Json },
-            { L"ps1", Language::PowerShell }, { L"psm1", Language::PowerShell }, { L"psd1", Language::PowerShell },
-            { L"py", Language::Python }, { L"pyw", Language::Python }, { L"pyi", Language::Python },
-            { L"rs", Language::Rust },
-            { L"sql", Language::Sql },
-            { L"ts", Language::TypeScript }, { L"tsx", Language::TypeScript }, { L"mts", Language::TypeScript }, { L"cts", Language::TypeScript },
-            { L"xml", Language::Xml }, { L"xaml", Language::Xml }, { L"xsd", Language::Xml }, { L"xsl", Language::Xml }, { L"xslt", Language::Xml },
-            { L"svg", Language::Xml }, { L"csproj", Language::Xml }, { L"vbproj", Language::Xml }, { L"vcxproj", Language::Xml },
-            { L"props", Language::Xml }, { L"targets", Language::Xml }, { L"filters", Language::Xml }, { L"config", Language::Xml },
-            { L"manifest", Language::Xml }, { L"resx", Language::Xml }, { L"nuspec", Language::Xml }, { L"plist", Language::Xml },
-        };
+        return static_cast<int>(Languages().Languages.size());
+    }
 
+    std::wstring_view LanguageName(LanguageId language)
+    {
+        auto const& languages = Languages().Languages;
+        return languages[language >= 0 && language < LanguageCount() ? language : PlainText].Name;
+    }
+
+    LanguageId FindLanguage(std::wstring_view name)
+    {
+        auto const& languages = Languages().Languages;
+        auto it = std::find_if(languages.begin(), languages.end(), [&](auto const& l) { return NamesEqual(l.Name, name); });
+        return it == languages.end() ? PlainText : static_cast<LanguageId>(it - languages.begin());
+    }
+
+    LanguageId LanguageFromPath(std::wstring_view path)
+    {
+        auto const& registry = Languages();
         size_t slash = path.find_last_of(L"\\/");
         std::wstring name = Lower(path.substr(slash == npos ? 0 : slash + 1));
-        size_t dot = name.find_last_of(L'.');
-        if (dot == npos)
+        if (auto it = registry.FileNames.find(name); it != registry.FileNames.end())
         {
-            return Language::PlainText;
+            return it->second;
         }
-        auto extension = std::wstring_view{ name }.substr(dot + 1);
-        for (auto const& [candidate, language] : extensions)
+        if (size_t dot = name.find_last_of(L'.'); dot != npos)
         {
-            if (candidate == extension)
+            if (auto it = registry.Extensions.find(name.substr(dot + 1)); it != registry.Extensions.end())
             {
-                return language;
+                return it->second;
             }
         }
-        return Language::PlainText;
+        return PlainText;
     }
 
-    void Classify(Language language, std::wstring_view text, std::vector<TokenKind>& kinds)
+    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds)
     {
         kinds.assign(text.size(), TokenKind::Plain);
-        if (text.size() <= MaxHighlightLength)
+        if (text.size() <= MaxHighlightLength && language > PlainText && language < LanguageCount())
         {
-            ClassifyInto(language, text, kinds.data());
+            ClassifyInto(Languages().Languages[language], text, kinds.data());
         }
     }
 }

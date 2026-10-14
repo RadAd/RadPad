@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Microsoft.Windows.CppWinRT.2.0.250303.1\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.250303.1\build\native\Microsoft.Windows.CppWinRT.props')" />
   <Import Project="..\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.4654\build\Microsoft.Windows.SDK.BuildTools.props" Condition="Exists('..\packages\Microsoft.Windows.SDK.BuildTools.10.0.26100.4654\build\Microsoft.Windows.SDK.BuildTools.props')" />
@@ -143,6 +143,58 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <!-- Language definitions for syntax highlighting, copied to the output's Languages folder. -->
+    <None Include="Languages\batch.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\c.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\cpp.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\csharp.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\css.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\go.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\html.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\ini.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\java.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\javascript.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\json.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\powershell.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\python.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\rust.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\sql.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\typescript.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Languages\xml.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

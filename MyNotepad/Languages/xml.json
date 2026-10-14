@@ -1,0 +1,5 @@
+{
+  "name": "XML",
+  "extensions": ["xml", "xaml", "xsd", "xsl", "xslt", "svg", "csproj", "vbproj", "vcxproj", "props", "targets", "filters", "config", "manifest", "resx", "nuspec", "plist"],
+  "tokenizer": "markup"
+}

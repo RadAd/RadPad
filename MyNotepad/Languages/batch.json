@@ -1,0 +1,7 @@
+{
+  "name": "Batch",
+  "extensions": ["bat", "cmd"],
+  "tokenizer": "batch",
+  "ignoreCase": true,
+  "keywords": "call cd chdir choice cls copy defined del do echo else endlocal enabledelayedexpansion enableextensions equ erase errorlevel exist exit for geq goto gtr if in leq lss md mkdir move neq not nul off on pause popd pushd rd ren rename rmdir set setlocal shift start title type"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "SQL",
+  "extensions": ["sql"],
+  "ignoreCase": true,
+  "keywords": "add all alter and any as asc avg begin between by cascade case cast check coalesce column commit constraint convert count create cross database declare default delete desc distinct drop else end exec execute exists fetch foreign from full function go grant group having if in index inner insert intersect into is join key left like limit max merge min not null offset on or order outer over partition primary procedure references return returns revoke right rollback rows select set sum table then top transaction trigger truncate union unique update use values view when where while with",
+  "types": "bigint binary bit blob boolean char date datetime datetime2 datetimeoffset decimal double float int integer money nchar ntext numeric nvarchar real serial smallint text time timestamp tinyint uniqueidentifier uuid varbinary varchar xml",
+  "lineComments": ["--"],
+  "blockComment": ["/*", "*/"],
+  "strings": "'\"",
+  "escape": ""
+}

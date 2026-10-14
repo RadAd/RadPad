@@ -1,5 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Languages">
+      <UniqueIdentifier>{5B2E7C41-8D3A-4F69-9C1E-2A7D4B6E8F10}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
@@ -23,5 +28,56 @@
     <ResourceCompile Include="MyNotepad.rc" />
     <Image Include="MyNotepad.ico" />
     <None Include="packages.config" />
+    <None Include="Languages\batch.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\c.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\cpp.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\csharp.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\css.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\go.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\html.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\ini.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\java.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\javascript.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\json.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\powershell.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\python.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\rust.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\sql.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\typescript.json">
+      <Filter>Languages</Filter>
+    </None>
+    <None Include="Languages\xml.json">
+      <Filter>Languages</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -1,0 +1,5 @@
+{
+  "name": "CSS",
+  "extensions": ["css", "scss", "less"],
+  "tokenizer": "css"
+}

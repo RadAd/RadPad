@@ -1,0 +1,12 @@
+{
+  "name": "C#",
+  "extensions": ["cs", "csx"],
+  "keywords": "abstract as base break case catch checked class const continue default delegate do else enum event explicit extern false finally fixed for foreach goto if implicit in interface internal is lock namespace new null operator out override params private protected public readonly ref return sealed sizeof stackalloc static struct switch this throw true try typeof unchecked unsafe using virtual volatile while add and async await by descending equals from get global group init into join let managed nameof not on or orderby partial record remove required select set unmanaged value var when where with yield",
+  "types": "bool byte char decimal double dynamic float int long nint nuint object sbyte short string uint ulong ushort void",
+  "lineComments": ["//"],
+  "blockComment": ["/*", "*/"],
+  "strings": "\"",
+  "charLiterals": true,
+  "preprocessor": true,
+  "verbatimStrings": true
+}

@@ -1,0 +1,5 @@
+{
+  "name": "INI",
+  "extensions": ["ini", "cfg", "conf", "inf", "reg", "properties", "editorconfig", "gitconfig"],
+  "tokenizer": "ini"
+}
