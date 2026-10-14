@@ -5,6 +5,9 @@
 #include <restrictederrorinfo.h>
 #include <hstring.h>
 #include <shellapi.h>
+#include <shlwapi.h>
+#include <propkey.h>
+#include <propvarutil.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <dwrite_1.h>
@@ -30,6 +33,7 @@
 #include <winrt/Microsoft.UI.Interop.h>
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <winrt/Microsoft.UI.Xaml.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Microsoft.UI.Xaml.Data.h>

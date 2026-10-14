@@ -28,7 +28,9 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 - **View > Show whitespace** marks spaces with `·` and tabs with `→`. Markers are drawn over the editor rather than inserted into the text. It's only available with a monospaced font and word wrap off, because markers are placed by line and column.
 - Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Light and dark themes have their own colours. Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
 - Open files from the command line or by dragging them onto the window
-- Settings are saved to `%LOCALAPPDATA%\MyNotepad\settings.ini`
+- **File > Recent files** lists the last 10 files opened or saved, newest first. Choosing a file that no longer exists removes it from the list.
+- The same files appear under **Recent** when you right-click MyNotepad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
+- Settings and the recent files list are saved to `%LOCALAPPDATA%\MyNotepad\settings.ini` (UTF-16, so paths in any language are kept)
 
 ## Source layout
 | File | Purpose |

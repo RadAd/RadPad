@@ -304,7 +304,33 @@ namespace
         std::wstring directory = std::wstring(folder) + L"\\MyNotepad";
         CoTaskMemFree(folder);
         CreateDirectoryW(directory.c_str(), nullptr);
-        return directory + L"\\settings.ini";
+        std::wstring path = directory + L"\\settings.ini";
+
+        // The profile functions only write Unicode to a file that starts with a UTF-16 byte order mark;
+        // otherwise characters outside the ANSI code page (in recent file paths, say) are lost. Create
+        // the file that way, and convert one written by an older version.
+        std::string bytes;
+        if (FILE* file = nullptr; _wfopen_s(&file, path.c_str(), L"rb") == 0 && file)
+        {
+            char buffer[4096];
+            for (size_t read; (read = fread(buffer, 1, sizeof(buffer), file)) > 0;)
+            {
+                bytes.append(buffer, read);
+            }
+            fclose(file);
+        }
+        if (!bytes.starts_with("\xFF\xFE"))
+        {
+            std::wstring text(static_cast<size_t>(MultiByteToWideChar(CP_ACP, 0, bytes.data(), static_cast<int>(bytes.size()), nullptr, 0)), L'\0');
+            MultiByteToWideChar(CP_ACP, 0, bytes.data(), static_cast<int>(bytes.size()), text.data(), static_cast<int>(text.size()));
+            if (FILE* file = nullptr; _wfopen_s(&file, path.c_str(), L"wb") == 0 && file)
+            {
+                fwrite("\xFF\xFE", 1, 2, file);
+                fwrite(text.data(), sizeof(wchar_t), text.size(), file);
+                fclose(file);
+            }
+        }
+        return path;
     }
 
     // %LOCALAPPDATA%\MyNotepad\Languages: language definitions added or customised by the user.
@@ -322,7 +348,7 @@ namespace
 
     // Where language definitions are loaded from: the Languages folder installed beside the exe, then
     // the user's folder, whose definitions override installed ones with the same name.
-    std::vector<std::wstring> LanguageFolders()
+    std::wstring ExePath()
     {
         std::wstring exe(MAX_PATH, L'\0');
         DWORD length = 0;
@@ -331,6 +357,12 @@ namespace
             exe.resize(exe.size() * 2);
         }
         exe.resize(length);
+        return exe;
+    }
+
+    std::vector<std::wstring> LanguageFolders()
+    {
+        auto exe = ExePath();
         std::wstring appFolder = exe.substr(0, exe.find_last_of(L'\\'));
         return { appFolder + L"\\Languages", UserLanguageFolder() };
     }
@@ -588,9 +620,27 @@ namespace winrt::MyNotepad::implementation
 
         appWindow.Closing([this](auto&&, AppWindowClosingEventArgs const& args) { OnAppWindowClosing(args); });
         Closed([this](auto&&, auto&&) { SaveSettings(); });
+        // Pick up files removed from the taskbar jump list. Closing the jump list can reactivate the window
+        // before Windows has saved the removal, so activation checks again a moment later, and the menu
+        // also checks just before it opens.
+        m_jumpListSyncTimer = DispatcherQueue().CreateTimer();
+        m_jumpListSyncTimer.Interval(std::chrono::milliseconds(1500));
+        m_jumpListSyncTimer.IsRepeating(false);
+        m_jumpListSyncTimer.Tick([this](auto&&, auto&&) { SyncWithJumpList(); });
+        Activated([this](auto&&, WindowActivatedEventArgs const& args)
+        {
+            if (m_loaded && args.WindowActivationState() != WindowActivationState::Deactivated)
+            {
+                SyncWithJumpList();
+                m_jumpListSyncTimer.Start();
+            }
+        });
+        RecentFilesMenu().PointerEntered([this](auto&&, auto&&) { SyncWithJumpList(); });
+        RecentFilesMenu().GotFocus([this](auto&&, auto&&) { SyncWithJumpList(); });
 
         LoadSettings();
         UpdateFontMetrics();
+        OnRecentFilesChanged();
         WordWrapItem().IsChecked(m_wordWrap);
         StatusBarItem().IsChecked(m_statusBarVisible);
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
@@ -930,6 +980,7 @@ namespace winrt::MyNotepad::implementation
             UpdateStatusBar();
         }
         SHAddToRecentDocs(SHARD_PATHW, fullPath.c_str());
+        AddRecentFile(fullPath);
     }
 
     void MainWindow::OpenWithDialog()
@@ -945,6 +996,187 @@ namespace winrt::MyNotepad::implementation
         {
             ShowMessageAsync(hstring{ AppName }, e.message());
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Recent files
+    // ---------------------------------------------------------------------------------------------
+
+    void MainWindow::AddRecentFile(std::wstring const& path)
+    {
+        constexpr size_t MaxRecentFiles = 10;
+
+        std::erase_if(m_recentFiles, [&](auto const& existing) { return PathsEqual(existing, path); });
+        m_recentFiles.insert(m_recentFiles.begin(), path);
+        if (m_recentFiles.size() > MaxRecentFiles)
+        {
+            m_recentFiles.resize(MaxRecentFiles);
+        }
+        OnRecentFilesChanged();
+    }
+
+    void MainWindow::OnRecentFilesChanged()
+    {
+        UpdateJumpList(); // first, as it drops files the user removed from the jump list
+        BuildRecentFilesMenu();
+        SaveSettings();
+    }
+
+    void MainWindow::UpdateJumpList()
+    {
+        // The list shown when right-clicking the app on the taskbar. Windows' own Recent category only
+        // shows file types registered to an app, and this unpackaged app registers none, so the recent
+        // files are added as a custom category of shortcuts that start MyNotepad with the file.
+        try
+        {
+            auto list = create_instance<ICustomDestinationList>(CLSID_DestinationList);
+            UINT maxSlots = 0;
+            com_ptr<IObjectArray> removed;
+            check_hresult(list->BeginList(&maxSlots, IID_PPV_ARGS(removed.put())));
+
+            // Files the user removed from the jump list can't be added back, so drop them from ours too.
+            DropRemovedJumpListFiles(removed.get());
+
+            auto exe = ExePath();
+            auto items = create_instance<IObjectCollection>(CLSID_EnumerableObjectCollection);
+            for (auto const& path : m_recentFiles)
+            {
+                auto link = create_instance<IShellLinkW>(CLSID_ShellLink);
+                check_hresult(link->SetPath(exe.c_str()));
+                check_hresult(link->SetArguments((L"\"" + path + L"\"").c_str()));
+                check_hresult(link->SetIconLocation(exe.c_str(), 0));
+                link->SetDescription(path.c_str()); // the tooltip; fails harmlessly for very long paths
+
+                // The text shown in the list is the file name.
+                auto slash = path.find_last_of(L"\\/");
+                PROPVARIANT title{};
+                check_hresult(InitPropVariantFromString(slash == std::wstring::npos ? path.c_str() : path.c_str() + slash + 1, &title));
+                auto store = link.as<IPropertyStore>();
+                HRESULT hr = store->SetValue(PKEY_Title, title);
+                PropVariantClear(&title);
+                check_hresult(hr);
+                check_hresult(store->Commit());
+                check_hresult(items->AddObject(link.get()));
+            }
+            if (!m_recentFiles.empty())
+            {
+                check_hresult(list->AppendCategory(L"Recent", items.as<IObjectArray>().get()));
+            }
+            check_hresult(list->CommitList());
+        }
+        catch (hresult_error const&)
+        {
+            // The jump list is a convenience; the File menu still has the list.
+        }
+    }
+
+    bool MainWindow::DropRemovedJumpListFiles(IObjectArray* removed)
+    {
+        // The removed items are the shortcuts made by UpdateJumpList, whose arguments are the quoted path.
+        auto oldCount = m_recentFiles.size();
+        UINT removedCount = 0;
+        if (FAILED(removed->GetCount(&removedCount)))
+        {
+            return false;
+        }
+        std::wstring arguments(32768, L'\0');
+        for (UINT i = 0; i < removedCount; ++i)
+        {
+            com_ptr<IShellLinkW> link;
+            if (SUCCEEDED(removed->GetAt(i, IID_PPV_ARGS(link.put())))
+                && SUCCEEDED(link->GetArguments(arguments.data(), static_cast<int>(arguments.size()))))
+            {
+                std::wstring path{ arguments.c_str() };
+                if (path.size() >= 2 && path.front() == L'"' && path.back() == L'"')
+                {
+                    path = path.substr(1, path.size() - 2);
+                }
+                std::erase_if(m_recentFiles, [&](auto const& existing) { return PathsEqual(existing, path); });
+            }
+        }
+        return m_recentFiles.size() != oldCount;
+    }
+
+    void MainWindow::SyncWithJumpList()
+    {
+        // Windows doesn't say when the user removes an item from the jump list, so this is called when the
+        // window is activated and before the Recent files menu opens.
+        try
+        {
+            auto list = create_instance<ICustomDestinationList>(CLSID_DestinationList);
+            UINT maxSlots = 0;
+            com_ptr<IObjectArray> removed;
+            check_hresult(list->BeginList(&maxSlots, IID_PPV_ARGS(removed.put())));
+            bool changed = DropRemovedJumpListFiles(removed.get());
+            list->AbortList();
+            if (changed)
+            {
+                OnRecentFilesChanged();
+            }
+        }
+        catch (hresult_error const&)
+        {
+        }
+    }
+
+    void MainWindow::OpenRecentFile(std::wstring path)
+    {
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        {
+            std::erase_if(m_recentFiles, [&](auto const& existing) { return PathsEqual(existing, path); });
+            OnRecentFilesChanged();
+            ShowMessageAsync(hstring{ AppName }, hstring{ std::format(L"\"{}\" can't be found, so it has been removed from Recent files.", path) });
+            return;
+        }
+        OpenFile(path);
+    }
+
+    void MainWindow::BuildRecentFilesMenu()
+    {
+        auto items = RecentFilesMenu().Items();
+        items.Clear();
+        if (m_recentFiles.empty())
+        {
+            MenuFlyoutItem none;
+            none.Text(L"No recent files");
+            none.IsEnabled(false);
+            items.Append(none);
+            return;
+        }
+
+        for (size_t i = 0; i < m_recentFiles.size(); ++i)
+        {
+            // "1  name.txt", with the full path in the tooltip and as the accessible name.
+            auto const& path = m_recentFiles[i];
+            auto slash = path.find_last_of(L"\\/");
+            auto name = slash == std::wstring::npos ? path : path.substr(slash + 1);
+            auto folder = slash == std::wstring::npos ? std::wstring{} : path.substr(0, slash);
+
+            // Long folders are shortened in the middle ("C:\Users\...\Project") to keep the menu narrow.
+            wchar_t shortFolder[64]{};
+            if (!PathCompactPathExW(shortFolder, folder.c_str(), ARRAYSIZE(shortFolder), 0))
+            {
+                wcsncpy_s(shortFolder, folder.c_str(), _TRUNCATE);
+            }
+
+            MenuFlyoutItem item;
+            item.Text(std::format(L"{}  {}", i + 1, name));
+            item.KeyboardAcceleratorTextOverride(shortFolder); // shown dimmed on the right
+            ToolTipService::SetToolTip(item, box_value(hstring{ path }));
+            Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(item, path);
+            item.Click([this, path](auto&&, auto&&) { OpenRecentFile(path); });
+            items.Append(item);
+        }
+
+        items.Append(MenuFlyoutSeparator{});
+        MenuFlyoutItem clear;
+        clear.Text(L"Clear recent files");
+        clear.Click([this](auto&&, auto&&)
+        {
+            m_recentFiles.clear();
+            OnRecentFilesChanged();
+        });
+        items.Append(clear);
     }
 
     bool MainWindow::SaveDocument(std::shared_ptr<Document> const& doc, bool saveAs)
@@ -1007,6 +1239,7 @@ namespace winrt::MyNotepad::implementation
             UpdateStatusBar();
         }
         SHAddToRecentDocs(SHARD_PATHW, path.c_str());
+        AddRecentFile(path);
         return true;
     }
 
@@ -2557,6 +2790,17 @@ namespace winrt::MyNotepad::implementation
         m_tabWidth = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"TabWidth", 8, path.c_str())), 1, 8);
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
         m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
+
+        m_recentFiles.clear();
+        std::wstring file(32768, L'\0'); // long enough for any path
+        for (int i = 1; i <= 10; ++i)
+        {
+            DWORD length = GetPrivateProfileStringW(L"RecentFiles", std::format(L"File{}", i).c_str(), L"", file.data(), static_cast<DWORD>(file.size()), path.c_str());
+            if (length > 0)
+            {
+                m_recentFiles.emplace_back(file.c_str(), length);
+            }
+        }
     }
 
     void MainWindow::SaveSettings()
@@ -2577,5 +2821,11 @@ namespace winrt::MyNotepad::implementation
         WritePrivateProfileStringW(L"Editor", L"TabWidth", std::to_wstring(m_tabWidth).c_str(), path.c_str());
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
+
+        WritePrivateProfileStringW(L"RecentFiles", nullptr, nullptr, path.c_str()); // remove the old list
+        for (size_t i = 0; i < m_recentFiles.size(); ++i)
+        {
+            WritePrivateProfileStringW(L"RecentFiles", std::format(L"File{}", i + 1).c_str(), m_recentFiles[i].c_str(), path.c_str());
+        }
     }
 }

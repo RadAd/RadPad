@@ -112,6 +112,9 @@
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
+                    <!-- Items are added in code from the saved list. -->
+                    <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent files" />
+                    <MenuFlyoutSeparator />
                     <!-- Ctrl+W / Ctrl+F4 are handled in RootGrid_PreviewKeyDown so the TabView doesn't also act on them. -->
                     <MenuFlyoutItem Text="Close tab" Tag="CloseTab" Click="Command_Click" KeyboardAcceleratorTextOverride="Ctrl+W" />
                     <MenuFlyoutItem Text="Exit" Tag="Exit" Click="Command_Click" />

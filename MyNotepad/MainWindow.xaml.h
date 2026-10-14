@@ -75,6 +75,15 @@ namespace winrt::MyNotepad::implementation
         std::shared_ptr<Document> FindDocumentByPath(std::wstring const& path);
         void OpenFile(std::wstring const& path);
         void OpenWithDialog();
+
+        // Recent files
+        void AddRecentFile(std::wstring const& path);
+        void OpenRecentFile(std::wstring path);
+        void BuildRecentFilesMenu();
+        void UpdateJumpList();
+        bool DropRemovedJumpListFiles(IObjectArray* removed);
+        void SyncWithJumpList();
+        void OnRecentFilesChanged();
         bool SaveDocument(std::shared_ptr<Document> const& doc, bool saveAs);
         void SaveAll();
         Windows::Foundation::IAsyncOperation<bool> ConfirmCloseDocumentAsync(std::shared_ptr<Document> doc);
@@ -164,6 +173,8 @@ namespace winrt::MyNotepad::implementation
         bool m_wordWrap{ false };
         bool m_statusBarVisible{ true };
         bool m_showWhitespace{ false };
+        std::vector<std::wstring> m_recentFiles;  // most recent first
+        Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
         bool m_fontMonospaced{ false };    // whether the editor font is monospaced
         double m_spaceAdvance{ 0.5 };      // width of a space in the editor font, as a fraction of the font size
