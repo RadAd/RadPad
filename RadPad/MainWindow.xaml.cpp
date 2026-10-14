@@ -994,6 +994,12 @@ namespace winrt::RadPad::implementation
                 e.Handled(true);
                 return;
             }
+            // Home goes to the first non-whitespace character of the line, or to the start if already there.
+            if (key == VK_HOME && !ctrl && !alt && d && SmartHome(d->Editor, shift))
+            {
+                e.Handled(true);
+                return;
+            }
             // Undo and redo use our own history (see Document::UndoStack).
             bool undo = (ctrl && !alt && key == 'Z') || (alt && !ctrl && !shift && key == VK_BACK);
             bool redo = ctrl && !alt && (key == 'Y' || (shift && key == 'Z'));
@@ -2629,6 +2635,40 @@ namespace winrt::RadPad::implementation
             column = text[i] == L'\t' ? (column / m_tabWidth + 1) * m_tabWidth : column + 1;
         }
         InsertText(editor, std::wstring(static_cast<size_t>(m_indentSize - column % m_indentSize), L' '));
+    }
+
+    bool MainWindow::SmartHome(RichEditBox const& editor, bool extend)
+    {
+        // Moves the caret (the selection's active end) to the first non-whitespace character of its line,
+        // or to the start of the line if it's already there. Returns false to leave Home to the editor.
+        auto selection = editor.Document().Selection();
+        bool startActive = (selection.Options() & Microsoft::UI::Text::SelectionOptions::StartActive) == Microsoft::UI::Text::SelectionOptions::StartActive;
+        int caret = startActive ? selection.StartPosition() : selection.EndPosition();
+        int anchor = startActive ? selection.EndPosition() : selection.StartPosition();
+
+        auto text = EditorText(editor);
+        auto position = std::min(static_cast<size_t>(std::max(caret, 0)), text.size());
+        size_t lineStart = position == 0 ? std::wstring::npos : text.find_last_of(L'\r', position - 1);
+        lineStart = lineStart == std::wstring::npos ? 0 : lineStart + 1;
+        size_t firstText = lineStart;
+        while (firstText < text.size() && (text[firstText] == L' ' || text[firstText] == L'\t'))
+        {
+            ++firstText;
+        }
+
+        // On a later row of a wrapped line, Home first goes to the start of that row, as usual.
+        auto row = editor.Document().GetRange(caret, caret);
+        row.StartOf(Microsoft::UI::Text::TextRangeUnit::Line, false);
+        if (row.StartPosition() > static_cast<int>(lineStart) && row.StartPosition() != caret)
+        {
+            return false;
+        }
+
+        int target = static_cast<int>(position == firstText ? lineStart : firstText);
+        // SetRange's first position is the anchor and the second the active end, so Shift+Home keeps
+        // extending from the same place.
+        selection.SetRange(extend ? anchor : target, target);
+        return true;
     }
 
     bool MainWindow::SelectionSpansLines(RichEditBox const& editor)

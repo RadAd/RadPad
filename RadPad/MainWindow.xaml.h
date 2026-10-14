@@ -181,6 +181,7 @@ namespace winrt::RadPad::implementation
         // Tabs and indentation
         void UpdateFontMetrics();
         void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        bool SmartHome(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, bool extend);
         bool SelectionSpansLines(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
         void ChangeIndent(std::shared_ptr<Document> const& doc, bool outdent);
         void BuildIndentMenus();
