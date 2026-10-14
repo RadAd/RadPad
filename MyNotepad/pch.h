@@ -6,6 +6,7 @@
 #include <hstring.h>
 #include <shellapi.h>
 #include <shlwapi.h>
+#include <commctrl.h>
 #include <propkey.h>
 #include <propvarutil.h>
 #include <shlobj.h>

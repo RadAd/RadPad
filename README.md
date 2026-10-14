@@ -27,7 +27,7 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 - Word wrap, font picker (all system fonts), zoom (Ctrl+Plus/Minus/0, Ctrl+mouse wheel), status bar toggle
 - **View > Show whitespace** marks spaces with `·` and tabs with `→`. Markers are drawn over the editor rather than inserted into the text. It's only available with a monospaced font and word wrap off, because markers are placed by line and column.
 - Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Light and dark themes have their own colours. Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
-- Open files from the command line or by dragging them onto the window
+- Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the MyNotepad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting MyNotepad without files always opens a new window.
 - **File > Recent files** lists the last 10 files opened or saved, newest first. Choosing a file that no longer exists removes it from the list.
 - The same files appear under **Recent** when you right-click MyNotepad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
 - Settings and the recent files list are saved to `%LOCALAPPDATA%\MyNotepad\settings.ini` (UTF-16, so paths in any language are kept)
@@ -37,6 +37,7 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 |---|---|
 | `MainWindow.xaml` / `.h` / `.cpp` | UI, tabs, commands, find/replace, dialogs |
 | `TextFile.h` / `.cpp` | File loading and saving, encoding and line-ending handling |
+| `Instance.h` / `.cpp` | Sends command-line files to a window already open on the current virtual desktop |
 | `Syntax.h` / `.cpp` | Loads the language definitions, detects a file's language and tokenizes text for highlighting |
 | `Languages/*.json` | The built-in language definitions, copied to the output's `Languages` folder |
 | `App.xaml` / `.cpp` | Application entry point |

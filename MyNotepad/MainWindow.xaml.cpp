@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "MainWindow.xaml.h"
+#include "Instance.h"
 #if __has_include("MainWindow.g.cpp")
 #include "MainWindow.g.cpp"
 #endif
@@ -617,6 +618,15 @@ namespace winrt::MyNotepad::implementation
         }
 
         appWindow.Resize({ MulDiv(1100, dpi, 96), MulDiv(760, dpi, 96) });
+
+        // Files opened from the command line (e.g. the jump list or Explorer) while this window is open.
+        instance::AcceptForwardedFiles(WindowHandle(), [this](std::vector<std::wstring> const& files)
+        {
+            for (auto const& file : files)
+            {
+                OpenFile(file);
+            }
+        });
 
         appWindow.Closing([this](auto&&, AppWindowClosingEventArgs const& args) { OnAppWindowClosing(args); });
         Closed([this](auto&&, auto&&) { SaveSettings(); });
