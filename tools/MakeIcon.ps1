@@ -1,4 +1,5 @@
 # Draws the RadPad app icon at each standard Windows size and writes it as a .ico.
+# The design: magenta < - > on a dark rounded square.
 # Usage: powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico [-PreviewDir <folder for PNG previews>]
 param([string]$OutIco, [string]$PreviewDir)
 $ErrorActionPreference = "Stop"
@@ -6,85 +7,41 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing @'
 using System; using System.Drawing; using System.Drawing.Drawing2D;
 public static class IconArt {
-    static GraphicsPath Round(RectangleF r, float rad, bool top, bool bottom) {
+    static GraphicsPath Round(RectangleF r, float rad) {
         var p = new GraphicsPath(); float d = rad * 2;
-        if (top) { p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90); }
-        else { p.AddLine(r.X, r.Y, r.Right, r.Y); }
-        if (bottom) { p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90); }
-        else { p.AddLine(r.Right, r.Bottom, r.X, r.Bottom); }
+        p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
         p.CloseFigure(); return p;
     }
-    // Draws the icon on a 256-unit canvas scaled to size; small sizes get less detail.
-    // Pixel-aligned art for 16-24 px, laid out on a 16-unit grid and rounded to whole pixels.
-    static Bitmap DrawSmall(int size) {
-        var bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        double u = size / 16.0;
-        Func<double, int> P = v => (int)Math.Round(v * u, MidpointRounding.AwayFromZero);
-        using (var g = Graphics.FromImage(bmp)) {
-            g.SmoothingMode = SmoothingMode.None;
-            Action<Color, int, int, int, int> box = (c, x1, y1, x2, y2) => { using (var b = new SolidBrush(c)) g.FillRectangle(b, x1, y1, Math.Max(1, x2 - x1), Math.Max(1, y2 - y1)); };
-            int t = Math.Max(1, P(1));
-            int left = P(2), top = P(1), right = P(14), bottom = P(15);
-            Color paper = Color.FromArgb(255, 250, 251, 253);
-            box(Color.FromArgb(255, 96, 112, 136), left, top, right, bottom);         // 1px outline
-            box(paper, left + 1, top + 1, right - 1, bottom - 1);
-            box(Color.FromArgb(255, 36, 116, 216), left + 1, top + 1, right - 1, P(5)); // tab strip
-            box(paper, P(4), P(3), P(8), P(5));                                       // selected tab
-            int row1 = P(7), row2 = P(9.5), row3 = Math.Min(P(12), bottom - 2 - t);
-            box(Color.FromArgb(255, 30, 110, 220), P(4), row1, P(6), row1 + t);
-            box(Color.FromArgb(255, 120, 130, 145), P(7), row1, P(12), row1 + t);
-            box(Color.FromArgb(255, 222, 110, 40), P(5), row2, P(10), row2 + t);
-            box(Color.FromArgb(255, 70, 160, 70), P(5), row3, P(12), row3 + t);
-        }
-        return bmp;
-    }
+    // Draws on a 256-unit canvas scaled to size.
     public static Bitmap Draw(int size) {
-        if (size <= 24) return DrawSmall(size);
         var bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        float unitsPerPixel = 256f / size;
         using (var g = Graphics.FromImage(bmp)) {
             g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.ScaleTransform(size / 256f, size / 256f);
-            bool small = size <= 24, medium = size <= 48 && !small;
-            float pad = small ? 12 : 24;
-            var page = new RectangleF(pad + 20, pad, 256 - 2 * pad - 40, 256 - 2 * pad);
-            float radius = small ? 28 : 20;
-            if (!small) using (var shadow = Round(new RectangleF(page.X + 2, page.Y + 6, page.Width, page.Height), radius, true, true))
-                using (var b = new SolidBrush(Color.FromArgb(36, 0, 0, 0))) g.FillPath(b, shadow);
-            using (var path = Round(page, radius, true, true)) {
-                using (var b = new SolidBrush(Color.FromArgb(255, 250, 251, 253))) g.FillPath(b, path);
-                // Tab strip across the top of the page.
-                float header = small ? 70 : 62;
-                var band = new RectangleF(page.X, page.Y, page.Width, header);
-                g.SetClip(path);
-                using (var b = new LinearGradientBrush(band, Color.FromArgb(255, 28, 104, 204), Color.FromArgb(255, 56, 142, 236), LinearGradientMode.Vertical))
-                    g.FillRectangle(b, band);
-                // The selected tab joins the page; a second tab sits beside it.
-                float tabTop = page.Y + (small ? 26 : 22), tabH = page.Y + header - tabTop + 1;
-                using (var tab = Round(new RectangleF(page.X + 16, tabTop, 70, tabH), small ? 12 : 10, true, false))
-                using (var b = new SolidBrush(Color.FromArgb(255, 250, 251, 253))) g.FillPath(b, tab);
-                if (!small)
-                    using (var tab2 = Round(new RectangleF(page.X + 94, tabTop + 4, 54, tabH - 4), 10, true, false))
-                    using (var b = new SolidBrush(Color.FromArgb(90, 255, 255, 255))) g.FillPath(b, tab2);
-                g.ResetClip();
-                using (var pen = new Pen(Color.FromArgb(255, 160, 172, 190), small ? 10 : 5)) { if (!small) g.DrawPath(pen, path); }
+
+            // The square, shading slightly darker towards the bottom, with a faint lighter edge so it
+            // stands out on a dark taskbar. Small sizes fill more of the canvas.
+            float pad = size <= 24 ? unitsPerPixel * 0.5f : 8;
+            var square = new RectangleF(pad, pad, 256 - 2 * pad, 256 - 2 * pad);
+            using (var path = Round(square, square.Width * 0.15f)) {
+                using (var b = new LinearGradientBrush(square, Color.FromArgb(255, 0x24, 0x27, 0x2B), Color.FromArgb(255, 0x19, 0x1A, 0x1C), LinearGradientMode.Vertical))
+                    g.FillPath(b, path);
+                using (var pen = new Pen(Color.FromArgb(255, 0x34, 0x37, 0x3C), Math.Max(3f, unitsPerPixel)))
+                    g.DrawPath(pen, path);
             }
-            // Syntax-coloured lines of code.
-            Color blue = Color.FromArgb(255, 30, 110, 220), teal = Color.FromArgb(255, 20, 150, 130), orange = Color.FromArgb(255, 222, 110, 40), gray = Color.FromArgb(255, 120, 130, 145), green = Color.FromArgb(255, 70, 160, 70);
-            float x0 = page.X + 22, th = small ? 22 : (medium ? 16 : 13);
-            float[][] rows; Color[][] cols;
-            if (small) {
-                rows = new[] { new[] { 0f, 50f, 64f, 150f }, new[] { 30f, 120f } };
-                cols = new[] { new[] { blue, gray }, new[] { orange } };
-            } else {
-                rows = new[] { new[] { 0f, 36f, 48f, 100f }, new[] { 20f, 52f, 64f, 116f }, new[] { 20f, 120f }, new[] { 0f, 26f } };
-                cols = new[] { new[] { blue, gray }, new[] { teal, orange }, new[] { green }, new[] { gray } };
+
+            // < - > in magenta with round ends. Strokes stay at least 2 pixels wide, and the shape is
+            // drawn a little larger at small sizes, so it stays legible.
+            float scale = size <= 24 ? 1.12f : 1f;
+            float stroke = Math.Max(17f, 2f * unitsPerPixel);
+            float cx = 128, cy = 128, tip = 80 * scale, arm = 40 * scale, reach = 41 * scale, dash = 19 * scale;
+            using (var pen = new Pen(Color.FromArgb(255, 0xD6, 0x35, 0xB6), stroke) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round }) {
+                g.DrawLines(pen, new[] { new PointF(cx - tip + reach, cy - arm), new PointF(cx - tip, cy), new PointF(cx - tip + reach, cy + arm) });
+                g.DrawLines(pen, new[] { new PointF(cx + tip - reach, cy - arm), new PointF(cx + tip, cy), new PointF(cx + tip - reach, cy + arm) });
+                g.DrawLine(pen, cx - dash, cy, cx + dash, cy);
             }
-            float y = page.Y + (small ? 112 : 104), step = small ? 52 : (medium ? 34 : 30);
-            if (medium) { rows = new[] { rows[0], rows[1], rows[2] }; }
-            for (int r = 0; r < rows.Length; r++, y += step)
-                for (int k = 0; k + 1 < rows[r].Length; k += 2)
-                    using (var pen = new Pen(cols[r][k / 2], th) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                        g.DrawLine(pen, x0 + rows[r][k] + th / 2, y, x0 + rows[r][k + 1] - th / 2, y);
         }
         return bmp;
     }
