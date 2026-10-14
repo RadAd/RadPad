@@ -185,6 +185,9 @@
     <None Include="Languages\python.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
+    <None Include="Languages\rc.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
     <None Include="Languages\rust.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
