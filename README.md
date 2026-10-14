@@ -20,6 +20,7 @@ Every **Release** build also creates `dist\MyNotepad-<platform>.zip` (e.g. `dist
 ## Features
 - Tabs in the title bar: new (Ctrl+N / Ctrl+T / +), close (Ctrl+W, Ctrl+F4), cycle (Ctrl+Tab), jump to a tab (Ctrl+1..9), reorder by dragging
 - Open (multi-select), Save, Save As (with an Encoding picker), Save All (Ctrl+Alt+S); prompts to save when closing a tab or the window
+- The Open and Save As file type lists include every loaded language, using the extensions in its definition. Save As starts on the document's language, and a new document is suggested that language's first extension.
 - Detects UTF-8, UTF-8 BOM, UTF-16 LE/BE and ANSI encodings, plus CRLF/LF/CR line endings; you can change either from the status bar
 - Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5), Tab key inserts tabs
 - Word wrap, font picker (all system fonts), zoom (Ctrl+Plus/Minus/0, Ctrl+mouse wheel), status bar toggle

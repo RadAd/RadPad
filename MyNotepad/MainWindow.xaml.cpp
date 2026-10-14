@@ -385,18 +385,67 @@ namespace
         return families;
     }
 
-    const COMDLG_FILTERSPEC FileTypes[] =
+    // The "Save as type" / file type list for the Open and Save As dialogs: text documents and all files,
+    // then one entry per loaded language that lists extensions or file names.
+    class FileTypeFilters
     {
-        { L"Text Documents (*.txt)", L"*.txt" },
-        { L"All Files (*.*)", L"*.*" },
+    public:
+        FileTypeFilters()
+        {
+            Add(L"Text Documents", L"*.txt", syntax::PlainText);
+            Add(L"All Files", L"*.*", syntax::PlainText);
+            for (syntax::LanguageId language = syntax::PlainText + 1; language < syntax::LanguageCount(); ++language)
+            {
+                std::wstring spec;
+                for (auto const& pattern : syntax::LanguagePatterns(language))
+                {
+                    spec += (spec.empty() ? L"" : L";") + pattern;
+                }
+                if (!spec.empty())
+                {
+                    Add(std::wstring{ syntax::LanguageName(language) }, spec, language);
+                }
+            }
+            for (size_t i = 0; i < m_names.size(); ++i)
+            {
+                m_specs.push_back({ m_names[i].c_str(), m_patterns[i].c_str() });
+            }
+        }
+
+        void Apply(IFileDialog* dialog) const
+        {
+            check_hresult(dialog->SetFileTypes(static_cast<UINT>(m_specs.size()), m_specs.data()));
+        }
+
+        // 1-based index of the entry for a language, as IFileDialog::SetFileTypeIndex expects;
+        // Text Documents for plain text or a language without an entry.
+        UINT IndexOf(syntax::LanguageId language) const
+        {
+            auto it = std::find(m_languages.begin() + 2, m_languages.end(), language);
+            return it == m_languages.end() ? 1 : static_cast<UINT>(it - m_languages.begin()) + 1;
+        }
+
+    private:
+        void Add(std::wstring const& name, std::wstring const& patterns, syntax::LanguageId language)
+        {
+            m_names.push_back(name + L" (" + patterns + L")");
+            m_patterns.push_back(patterns);
+            m_languages.push_back(language);
+        }
+
+        std::vector<std::wstring> m_names;
+        std::vector<std::wstring> m_patterns;
+        std::vector<syntax::LanguageId> m_languages;
+        std::vector<COMDLG_FILTERSPEC> m_specs; // points into m_names and m_patterns
     };
 
     std::vector<std::wstring> ShowOpenFileDialog(HWND owner)
     {
         std::vector<std::wstring> paths;
 
+        FileTypeFilters filters;
         auto dialog = create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
-        check_hresult(dialog->SetFileTypes(ARRAYSIZE(FileTypes), FileTypes));
+        filters.Apply(dialog.get());
         FILEOPENDIALOGOPTIONS options{};
         check_hresult(dialog->GetOptions(&options));
         check_hresult(dialog->SetOptions(options | FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM));
@@ -431,14 +480,17 @@ namespace
         TextEncoding Encoding;
     };
 
-    // Shows the Save As dialog with an Encoding drop-down, like Notepad's.
-    std::optional<SaveDialogResult> ShowSaveFileDialog(HWND owner, std::wstring const& currentPath, std::wstring const& suggestedName, TextEncoding encoding)
+    // Shows the Save As dialog with an Encoding drop-down, like Notepad's. The file type starts on the
+    // document's language, and choosing another type changes the extension the dialog adds.
+    std::optional<SaveDialogResult> ShowSaveFileDialog(HWND owner, std::wstring const& currentPath, std::wstring const& suggestedName, TextEncoding encoding, syntax::LanguageId language)
     {
         constexpr DWORD EncodingGroupId = 100;
         constexpr DWORD EncodingComboId = 101;
 
+        FileTypeFilters filters;
         auto dialog = create_instance<IFileSaveDialog>(CLSID_FileSaveDialog);
-        check_hresult(dialog->SetFileTypes(ARRAYSIZE(FileTypes), FileTypes));
+        filters.Apply(dialog.get());
+        check_hresult(dialog->SetFileTypeIndex(filters.IndexOf(language)));
         check_hresult(dialog->SetDefaultExtension(L"txt"));
         check_hresult(dialog->SetFileName(suggestedName.c_str()));
 
@@ -898,8 +950,15 @@ namespace winrt::MyNotepad::implementation
         {
             try
             {
-                auto suggested = doc->Path.empty() ? std::wstring{ L"Untitled.txt" } : doc->DisplayName();
-                auto result = ShowSaveFileDialog(WindowHandle(), doc->Path, suggested, doc->Encoding);
+                // A new document is suggested the first extension of its language, or .txt.
+                std::wstring suggested = doc->DisplayName();
+                if (doc->Path.empty())
+                {
+                    auto patterns = syntax::LanguagePatterns(doc->Language);
+                    bool hasExtension = !patterns.empty() && patterns.front().starts_with(L"*.");
+                    suggested = L"Untitled." + (hasExtension ? patterns.front().substr(2) : std::wstring{ L"txt" });
+                }
+                auto result = ShowSaveFileDialog(WindowHandle(), doc->Path, suggested, doc->Encoding, doc->Language);
                 if (!result)
                 {
                     return false;

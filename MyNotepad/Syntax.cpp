@@ -1195,6 +1195,21 @@ namespace syntax
         return PlainText;
     }
 
+    std::vector<std::wstring> LanguagePatterns(LanguageId language)
+    {
+        std::vector<std::wstring> patterns;
+        if (language > PlainText && language < LanguageCount())
+        {
+            auto const& lang = Languages().Languages[language];
+            for (auto const& extension : lang.Extensions)
+            {
+                patterns.push_back(L"*." + extension);
+            }
+            patterns.insert(patterns.end(), lang.FileNames.begin(), lang.FileNames.end());
+        }
+        return patterns;
+    }
+
     void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds)
     {
         kinds.assign(text.size(), TokenKind::Plain);

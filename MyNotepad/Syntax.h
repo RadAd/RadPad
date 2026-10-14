@@ -38,6 +38,10 @@ namespace syntax
     LanguageId FindLanguage(std::wstring_view name); // PlainText if not found
     LanguageId LanguageFromPath(std::wstring_view path);
 
+    // File name patterns for a language, for file dialog filters: "*.ext" for each extension, then
+    // any whole file names. Empty for Plain text and for languages that list neither.
+    std::vector<std::wstring> LanguagePatterns(LanguageId language);
+
     // Resizes kinds to text.size() and sets the token kind of every character.
     void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds);
 }
