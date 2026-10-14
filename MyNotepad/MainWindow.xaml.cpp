@@ -204,6 +204,57 @@ namespace
         return nullptr;
     }
 
+    // The rectangle of the character at position, relative to the top-left of the view. RichEdit measures
+    // from the top-left of the document, as the ScrollViewer around it does the scrolling.
+    Windows::Foundation::Rect CharRectInView(RichEditTextDocument const& document, int position, int length, ScrollViewer const& viewer)
+    {
+        Windows::Foundation::Rect rect{};
+        int hit = 0;
+        document.GetRange(position, std::min(position + 1, length)).GetRect(PointOptions::ClientCoordinates, rect, hit);
+        rect.X -= static_cast<float>(viewer.HorizontalOffset());
+        rect.Y -= static_cast<float>(viewer.VerticalOffset());
+        return rect;
+    }
+
+    // The first display row at least partly in view, as an empty range at its start, or null.
+    // Only rows near the view are asked about: asking about rows far outside it makes RichEdit lay out the
+    // whole document at once, which on a large file with word wrap stops it drawing.
+    Microsoft::UI::Text::ITextRange FirstVisibleRow(RichEditTextDocument const& document, int length, ScrollViewer const& viewer)
+    {
+        if (length == 0 || viewer.ExtentHeight() <= 0)
+        {
+            return nullptr;
+        }
+
+        // Start from the same fraction of the text as the scroll position, then move by rows to the first
+        // row in view. Rows are all the same height, so the distance says how many rows to move.
+        auto guess = static_cast<int>(viewer.VerticalOffset() / viewer.ExtentHeight() * length);
+        auto row = document.GetRange(guess, guess);
+        row.StartOf(TextRangeUnit::Line, false);
+        for (int attempt = 0; attempt < 20; ++attempt)
+        {
+            auto rect = CharRectInView(document, row.StartPosition(), length, viewer);
+            if (rect.Height <= 0)
+            {
+                return nullptr;
+            }
+            int rows = 0;
+            if (rect.Y > 0.5)
+            {
+                rows = -std::max(1, static_cast<int>(std::ceil(rect.Y / rect.Height - 0.01))); // below the top: back up
+            }
+            else if (rect.Y + rect.Height <= 0.5)
+            {
+                rows = std::max(1, static_cast<int>(-rect.Y / rect.Height)); // above the top: go forward
+            }
+            if (rows == 0 || row.Move(TextRangeUnit::Line, rows) == 0)
+            {
+                break;
+            }
+        }
+        return row;
+    }
+
     struct FontMetrics
     {
         bool Monospaced{ false };
@@ -670,6 +721,7 @@ namespace winrt::MyNotepad::implementation
         BuildLanguageMenus();
         BuildIndentMenus();
         ShowWhitespaceItem().IsChecked(m_showWhitespace);
+        TrailingWhitespaceItem().IsChecked(m_highlightTrailingWhitespace);
         UpdateWhitespaceAvailability();
 
         // Syntax colours differ between light and dark themes.
@@ -820,6 +872,10 @@ namespace winrt::MyNotepad::implementation
                 if (d == CurrentDocument())
                 {
                     UpdateCaretPosition();
+                    if (m_highlightTrailingWhitespace)
+                    {
+                        ScheduleOverlayUpdate(); // whitespace at the caret isn't highlighted
+                    }
                 }
             }
         });
@@ -1617,6 +1673,12 @@ namespace winrt::MyNotepad::implementation
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
     }
 
+    void MainWindow::TrailingWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        m_highlightTrailingWhitespace = TrailingWhitespaceItem().IsChecked();
+        UpdateEditorOverlay();
+    }
+
     void MainWindow::ShowWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
     {
         m_showWhitespace = ShowWhitespaceItem().IsChecked();
@@ -2096,6 +2158,17 @@ namespace winrt::MyNotepad::implementation
         {
             return;
         }
+
+        // Clip to the text area; the wrap markers widen it to include the right padding.
+        auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
+        RectangleGeometry clip;
+        clip.Rect({ origin.X, origin.Y, static_cast<float>(presenter.ActualWidth()), static_cast<float>(presenter.ActualHeight()) });
+        overlay.Clip(clip);
+
+        if (m_highlightTrailingWhitespace)
+        {
+            DrawTrailingWhitespace(doc, presenter); // first, so markers are drawn over it
+        }
         if (m_wordWrap)
         {
             DrawWrapMarkers(doc, presenter);
@@ -2142,8 +2215,7 @@ namespace winrt::MyNotepad::implementation
             tabWidth = charWidth * 8;
         }
 
-        // The text is laid out from the viewport's top-left corner, less the scroll offset.
-        auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
+        // The text is laid out from the viewport's top-left corner (origin), less the scroll offset.
         double width = presenter.ActualWidth();
         double height = presenter.ActualHeight();
         double scrollX = viewer.HorizontalOffset();
@@ -2152,10 +2224,6 @@ namespace winrt::MyNotepad::implementation
         {
             return Point{ static_cast<float>(origin.X + x - scrollX), static_cast<float>(origin.Y + y - scrollY) };
         };
-
-        RectangleGeometry clip;
-        clip.Rect({ origin.X, origin.Y, static_cast<float>(width), static_cast<float>(height) });
-        overlay.Clip(clip);
 
         GeometryGroup shapes;
         auto line = [&](Point from, Point to)
@@ -2218,12 +2286,113 @@ namespace winrt::MyNotepad::implementation
         overlay.Children().Append(path);
     }
 
+    void MainWindow::ScheduleOverlayUpdate()
+    {
+        // Once per batch of changes, after layout has caught up with them.
+        if (std::exchange(m_overlayUpdatePending, true))
+        {
+            return;
+        }
+        DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [this, strong = get_strong()]
+        {
+            m_overlayUpdatePending = false;
+            UpdateEditorOverlay();
+        });
+    }
+
+    void MainWindow::DrawTrailingWhitespace(std::shared_ptr<Document> const& doc, ScrollContentPresenter const& presenter)
+    {
+        // Shades spaces and tabs at the ends of lines on screen. Whitespace ending at the caret is left alone,
+        // so typing a space before the next word doesn't flash.
+        auto overlay = EditorOverlay();
+        auto viewer = doc->ScrollViewer;
+        auto document = doc->Editor.Document();
+        auto text = EditorText(doc->Editor);
+        auto length = static_cast<int>(text.size());
+        try
+        {
+            auto row = FirstVisibleRow(document, length, viewer);
+            if (!row)
+            {
+                return;
+            }
+            auto selection = document.Selection();
+            int caret = selection.Length() == 0 ? selection.StartPosition() : -1;
+            auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
+            double height = presenter.ActualHeight();
+
+            GeometryGroup shapes;
+            auto addRect = [&](Windows::Foundation::Rect const& rect)
+            {
+                RectangleGeometry geometry;
+                geometry.Rect({ origin.X + rect.X, origin.Y + rect.Y, rect.Width, rect.Height });
+                shapes.Children().Append(geometry);
+            };
+
+            // Each line from the one holding the first row in view, until a line starts below the view.
+            size_t lineStart = text.find_last_of(L'\r', row.StartPosition() == 0 ? 0 : row.StartPosition() - 1);
+            lineStart = lineStart == std::wstring::npos || row.StartPosition() == 0 ? 0 : lineStart + 1;
+            for (int count = 0; count < 1000 && lineStart <= text.size(); ++count)
+            {
+                if (count > 0 && CharRectInView(document, static_cast<int>(lineStart), length, viewer).Y >= height)
+                {
+                    break;
+                }
+                size_t lineEnd = std::min(text.find(L'\r', lineStart), text.size());
+                size_t trailing = lineEnd;
+                while (trailing > lineStart && (text[trailing - 1] == L' ' || text[trailing - 1] == L'\t'))
+                {
+                    --trailing;
+                }
+
+                if (trailing < lineEnd && static_cast<int>(lineEnd) != caret)
+                {
+                    // One rectangle per row: with word wrap, the whitespace can run onto the next row.
+                    // Long runs are capped, as each character's position is a separate request.
+                    std::optional<Windows::Foundation::Rect> current;
+                    for (size_t i = trailing; i < lineEnd && i < trailing + 500; ++i)
+                    {
+                        auto rect = CharRectInView(document, static_cast<int>(i), length, viewer);
+                        if (current && std::abs(rect.Y - current->Y) < 0.5f)
+                        {
+                            current->Width = rect.X + rect.Width - current->X;
+                            continue;
+                        }
+                        if (current)
+                        {
+                            addRect(*current);
+                        }
+                        current = rect;
+                    }
+                    if (current)
+                    {
+                        addRect(*current);
+                    }
+                }
+
+                if (lineEnd >= text.size())
+                {
+                    break;
+                }
+                lineStart = lineEnd + 1;
+            }
+
+            Shapes::Path path;
+            path.Data(shapes);
+            path.Fill(SolidColorBrush{ Windows::UI::Color{ 0x50, 0xE0, 0x40, 0x40 } });
+            overlay.Children().Append(path);
+        }
+        catch (hresult_error const&)
+        {
+            // A convenience; leave it off if RichEdit can't report positions.
+        }
+    }
+
     void MainWindow::DrawWrapMarkers(std::shared_ptr<Document> const& doc, ScrollContentPresenter const& presenter)
     {
         // Marks each display row that continues on the next row with a ↵ in the editor's right padding.
         // RichEdit's Line unit is a display row, so a row whose range doesn't end with a line break has wrapped.
-        // Only rows on screen are examined, and each one's position comes from RichEdit: asking about rows far
-        // outside the view makes RichEdit wrap the whole document at once, which on a large file stops it drawing.
+        // Only rows on screen are examined (see FirstVisibleRow).
         auto overlay = EditorOverlay();
         auto viewer = doc->ScrollViewer;
         auto document = doc->Editor.Document();
@@ -2236,45 +2405,11 @@ namespace winrt::MyNotepad::implementation
 
         try
         {
-            // Where a row is, relative to the top of the view. RichEdit measures from the top of the document,
-            // as the ScrollViewer around it does the scrolling.
-            auto scrollY = static_cast<float>(viewer.VerticalOffset());
-            auto rowRect = [&](Microsoft::UI::Text::ITextRange const& row)
-            {
-                int start = row.StartPosition();
-                Windows::Foundation::Rect rect{};
-                int hit = 0;
-                document.GetRange(start, std::min(start + 1, length)).GetRect(PointOptions::ClientCoordinates, rect, hit);
-                rect.Y -= scrollY;
-                return rect;
-            };
-
-            // Start from the same fraction of the text as the scroll position, then move by rows to the first
-            // row in view. Rows are all the same height, so the distance says how many rows to move.
             double height = presenter.ActualHeight();
-            auto guess = static_cast<int>(viewer.VerticalOffset() / viewer.ExtentHeight() * length);
-            auto row = document.GetRange(guess, guess);
-            row.StartOf(TextRangeUnit::Line, false);
-            for (int attempt = 0; attempt < 20; ++attempt)
+            auto row = FirstVisibleRow(document, length, viewer);
+            if (!row)
             {
-                auto rect = rowRect(row);
-                if (rect.Height <= 0)
-                {
-                    return;
-                }
-                int rows = 0;
-                if (rect.Y > 0.5)
-                {
-                    rows = -std::max(1, static_cast<int>(std::ceil(rect.Y / rect.Height - 0.01))); // below the top: back up
-                }
-                else if (rect.Y + rect.Height <= 0.5)
-                {
-                    rows = std::max(1, static_cast<int>(-rect.Y / rect.Height)); // above the top: go forward
-                }
-                if (rows == 0 || row.Move(TextRangeUnit::Line, rows) == 0)
-                {
-                    break;
-                }
+                return;
             }
 
             auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
@@ -2305,7 +2440,7 @@ namespace winrt::MyNotepad::implementation
 
             for (int count = 0; count < 1000; ++count)
             {
-                auto rect = rowRect(row);
+                auto rect = CharRectInView(document, row.StartPosition(), length, viewer);
                 if (rect.Y >= height)
                 {
                     break;
@@ -3212,6 +3347,7 @@ namespace winrt::MyNotepad::implementation
         m_tabWidth = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"TabWidth", 8, path.c_str())), 1, 8);
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
         m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
+        m_highlightTrailingWhitespace = GetPrivateProfileIntW(L"View", L"HighlightTrailingWhitespace", 1, path.c_str()) != 0;
 
         m_recentFiles.clear();
         std::wstring file(32768, L'\0'); // long enough for any path
@@ -3243,6 +3379,7 @@ namespace winrt::MyNotepad::implementation
         WritePrivateProfileStringW(L"Editor", L"TabWidth", std::to_wstring(m_tabWidth).c_str(), path.c_str());
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"HighlightTrailingWhitespace", m_highlightTrailingWhitespace ? L"1" : L"0", path.c_str());
 
         WritePrivateProfileStringW(L"RecentFiles", nullptr, nullptr, path.c_str()); // remove the old list
         for (size_t i = 0; i < m_recentFiles.size(); ++i)

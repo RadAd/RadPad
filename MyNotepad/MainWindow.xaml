@@ -194,6 +194,7 @@
                     <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True" />
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
                     <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
+                    <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Help">

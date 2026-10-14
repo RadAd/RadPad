@@ -98,6 +98,7 @@ namespace winrt::MyNotepad::implementation
         void ZoomReset_Click(Sender const&, ClickArgs const&);
         void StatusBar_Click(Sender const&, ClickArgs const&);
         void ShowWhitespace_Click(Sender const&, ClickArgs const&);
+        void TrailingWhitespace_Click(Sender const&, ClickArgs const&);
         void About_Click(Sender const&, ClickArgs const&);
         void Crlf_Click(Sender const&, ClickArgs const&);
         void Lf_Click(Sender const&, ClickArgs const&);
@@ -160,6 +161,8 @@ namespace winrt::MyNotepad::implementation
 
         // Overlay: visible whitespace, or wrapped-line markers
         void UpdateEditorOverlay();
+        void DrawTrailingWhitespace(std::shared_ptr<Document> const& doc, Microsoft::UI::Xaml::Controls::ScrollContentPresenter const& presenter);
+        void ScheduleOverlayUpdate();
         void DrawWrapMarkers(std::shared_ptr<Document> const& doc, Microsoft::UI::Xaml::Controls::ScrollContentPresenter const& presenter);
         void UpdateWhitespaceAvailability();
 
@@ -229,6 +232,8 @@ namespace winrt::MyNotepad::implementation
         bool m_wordWrap{ false };
         bool m_statusBarVisible{ true };
         bool m_showWhitespace{ false };
+        bool m_highlightTrailingWhitespace{ true };
+        bool m_overlayUpdatePending{ false };
         std::vector<std::wstring> m_recentFiles;  // most recent first
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
