@@ -88,7 +88,10 @@ namespace winrt::MyNotepad::implementation
         void SaveAll();
         Windows::Foundation::IAsyncOperation<bool> ConfirmCloseDocumentAsync(std::shared_ptr<Document> doc);
         fire_and_forget CloseDocumentAsync(std::shared_ptr<Document> doc);
+        fire_and_forget CloseDocumentsAsync(std::vector<std::shared_ptr<Document>> docs, std::shared_ptr<Document> keep);
         void RemoveDocument(std::shared_ptr<Document> const& doc);
+        Microsoft::UI::Xaml::Controls::MenuFlyout CreateTabMenu(std::weak_ptr<Document> weakDoc);
+        void OpenContainingFolder(std::wstring const& path);
         void SelectAdjacentTab(int delta);
         void SelectTabAt(int index);
         void OnCurrentDocumentChanged();

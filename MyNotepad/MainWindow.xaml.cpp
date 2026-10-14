@@ -44,6 +44,14 @@ namespace
         return CompareStringOrdinal(a.c_str(), -1, b.c_str(), -1, TRUE) == CSTR_EQUAL;
     }
 
+    void CopyTextToClipboard(std::wstring const& text)
+    {
+        DataPackage package;
+        package.SetText(text);
+        Clipboard::SetContent(package);
+        Clipboard::Flush(); // keep the text after the app closes
+    }
+
     std::wstring FullPath(std::wstring const& path)
     {
         DWORD length = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
@@ -919,6 +927,7 @@ namespace winrt::MyNotepad::implementation
         tab.IconSource(icon);
 
         doc->Tab = tab;
+        tab.ContextFlyout(CreateTabMenu(weakDoc));
         m_documents.push_back(doc);
         EditorHost().Children().Append(editor);
         UpdateDocumentState(doc);
@@ -1309,6 +1318,110 @@ namespace winrt::MyNotepad::implementation
         if (canClose)
         {
             RemoveDocument(doc);
+        }
+    }
+
+    fire_and_forget MainWindow::CloseDocumentsAsync(std::vector<std::shared_ptr<Document>> docs, std::shared_ptr<Document> keep)
+    {
+        // Closes the documents in order, asking about unsaved changes; Cancel stops at that document.
+        auto strong = get_strong();
+        for (auto const& doc : docs)
+        {
+            if (doc->IsClosing)
+            {
+                continue;
+            }
+            doc->IsClosing = true;
+            bool canClose = co_await ConfirmCloseDocumentAsync(doc);
+            doc->IsClosing = false;
+            if (!canClose)
+            {
+                co_return;
+            }
+            RemoveDocument(doc);
+        }
+        Tabs().SelectedItem(keep->Tab);
+    }
+
+    MenuFlyout MainWindow::CreateTabMenu(std::weak_ptr<Document> weakDoc)
+    {
+        MenuFlyout menu;
+        auto addItem = [&](wchar_t const* text, std::function<void(std::shared_ptr<Document> const&)> action)
+        {
+            MenuFlyoutItem item;
+            item.Text(text);
+            item.Click([weakDoc, action](auto&&, auto&&)
+            {
+                if (auto doc = weakDoc.lock())
+                {
+                    action(doc);
+                }
+            });
+            menu.Items().Append(item);
+            return item;
+        };
+
+        auto copyName = addItem(L"Copy file name", [](auto const& doc) { CopyTextToClipboard(doc->DisplayName()); });
+        auto copyPath = addItem(L"Copy full path", [](auto const& doc) { CopyTextToClipboard(doc->Path); });
+        auto openFolder = addItem(L"Open containing folder", [this](auto const& doc) { OpenContainingFolder(doc->Path); });
+        menu.Items().Append(MenuFlyoutSeparator{});
+        addItem(L"Close", [this](auto const& doc) { CloseDocumentAsync(doc); });
+        auto closeOthers = addItem(L"Close others", [this](auto const& doc)
+        {
+            std::vector<std::shared_ptr<Document>> others;
+            std::copy_if(m_documents.begin(), m_documents.end(), std::back_inserter(others), [&](auto const& d) { return d != doc; });
+            CloseDocumentsAsync(std::move(others), doc);
+        });
+        auto closeRight = addItem(L"Close tabs to the right", [this](auto const& doc)
+        {
+            // In tab order, which can differ from m_documents after tabs are dragged.
+            std::vector<std::shared_ptr<Document>> right;
+            uint32_t index = 0;
+            if (Tabs().TabItems().IndexOf(doc->Tab, index))
+            {
+                for (uint32_t i = index + 1; i < Tabs().TabItems().Size(); ++i)
+                {
+                    if (auto d = FindDocument(Tabs().TabItems().GetAt(i)))
+                    {
+                        right.push_back(d);
+                    }
+                }
+            }
+            CloseDocumentsAsync(std::move(right), doc);
+        });
+
+        // An untitled document has no file name or folder yet.
+        menu.Opening([this, weakDoc, copyName, copyPath, openFolder, closeOthers, closeRight](auto&&, auto&&)
+        {
+            auto doc = weakDoc.lock();
+            if (!doc)
+            {
+                return;
+            }
+            bool hasPath = !doc->Path.empty();
+            copyName.IsEnabled(hasPath);
+            copyPath.IsEnabled(hasPath);
+            openFolder.IsEnabled(hasPath);
+            uint32_t index = 0;
+            Tabs().TabItems().IndexOf(doc->Tab, index);
+            closeOthers.IsEnabled(m_documents.size() > 1);
+            closeRight.IsEnabled(index + 1 < Tabs().TabItems().Size());
+        });
+        return menu;
+    }
+
+    void MainWindow::OpenContainingFolder(std::wstring const& path)
+    {
+        // Opens Explorer with the file selected.
+        PIDLIST_ABSOLUTE item = ILCreateFromPathW(path.c_str());
+        HRESULT hr = item ? SHOpenFolderAndSelectItems(item, 0, nullptr, 0) : HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        if (item)
+        {
+            ILFree(item);
+        }
+        if (FAILED(hr))
+        {
+            ShowMessageAsync(hstring{ AppName }, hstring{ std::format(L"Couldn't open the folder containing \"{}\".\n\n{}", path, std::wstring_view{ hresult_error(hr).message() }) });
         }
     }
 
