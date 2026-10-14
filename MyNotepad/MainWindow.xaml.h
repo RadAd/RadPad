@@ -158,8 +158,9 @@ namespace winrt::MyNotepad::implementation
         void OpenLanguageFolder();
         void ShowLanguageErrors();
 
-        // Visible whitespace
-        void UpdateWhitespaceOverlay();
+        // Overlay: visible whitespace, or wrapped-line markers
+        void UpdateEditorOverlay();
+        void DrawWrapMarkers(std::shared_ptr<Document> const& doc, Microsoft::UI::Xaml::Controls::ScrollContentPresenter const& presenter);
         void UpdateWhitespaceAvailability();
 
         // Tabs and indentation

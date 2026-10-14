@@ -253,8 +253,8 @@
                     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
                     <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
                 </Grid.Resources>
-                <!-- Draws space and tab markers over the current editor (View > Show whitespace). -->
-                <Canvas x:Name="WhitespaceOverlay" IsHitTestVisible="False" Canvas.ZIndex="1" />
+                <!-- Draws over the current editor: space and tab markers (View > Show whitespace), or wrapped-line markers when word wrap is on. -->
+                <Canvas x:Name="EditorOverlay" IsHitTestVisible="False" Canvas.ZIndex="1" />
             </Grid>
 
             <!-- Status bar -->

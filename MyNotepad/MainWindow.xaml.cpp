@@ -20,6 +20,7 @@ using winrt::Microsoft::UI::Text::ITextCharacterFormat;
 using winrt::Microsoft::UI::Text::PointOptions;
 using winrt::Microsoft::UI::Text::RichEditTextDocument;
 using winrt::Microsoft::UI::Text::TextGetOptions;
+using winrt::Microsoft::UI::Text::TextRangeUnit;
 using winrt::Microsoft::UI::Text::TextSetOptions;
 using syntax::TokenKind;
 using textfile::LineEnding;
@@ -33,6 +34,8 @@ namespace
     constexpr int MaxZoom = 500;
     constexpr int ZoomStep = 10;
     constexpr double DefaultFontPoints = 11.0;
+    constexpr double EditorPadding = 12;     // around the text
+    constexpr double WrapMarkerWidth = 14;   // extra right padding for the wrap markers, left of the scrollbar
 
     bool IsKeyDown(int virtualKey)
     {
@@ -179,6 +182,23 @@ namespace
             if (auto match = FindDescendant<T>(child))
             {
                 return match;
+            }
+        }
+        return nullptr;
+    }
+
+    Primitives::ScrollBar FindVerticalScrollBar(DependencyObject const& root)
+    {
+        for (int i = 0, count = VisualTreeHelper::GetChildrenCount(root); i < count; ++i)
+        {
+            auto child = VisualTreeHelper::GetChild(root, i);
+            if (auto bar = child.try_as<Primitives::ScrollBar>(); bar && bar.Orientation() == Orientation::Vertical)
+            {
+                return bar;
+            }
+            if (auto bar = FindVerticalScrollBar(child))
+            {
+                return bar;
             }
         }
         return nullptr;
@@ -763,7 +783,6 @@ namespace winrt::MyNotepad::implementation
         editor.Document().UndoLimit(0); // see Document::UndoStack
         editor.BorderThickness(Thickness{ 0, 0, 0, 0 });
         editor.CornerRadius(Microsoft::UI::Xaml::CornerRadius{ 0, 0, 0, 0 });
-        editor.Padding(Thickness{ 12, 8, 12, 8 });
         editor.Visibility(Visibility::Collapsed);
         ScrollViewer::SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility::Auto);
         ScrollViewer::SetVerticalScrollBarVisibility(editor, ScrollBarVisibility::Auto);
@@ -819,17 +838,22 @@ namespace winrt::MyNotepad::implementation
                 if (auto viewer = FindDescendant<ScrollViewer>(sender.as<DependencyObject>()))
                 {
                     d->ScrollViewer = viewer;
-                    viewer.ViewChanged([this, weakDoc](auto&&, auto&&)
+                    auto onViewChanged = [this, weakDoc]()
                     {
                         if (auto scrolled = weakDoc.lock())
                         {
                             ScheduleRepaint(scrolled);
                             if (scrolled == CurrentDocument())
                             {
-                                UpdateWhitespaceOverlay(); // keep the markers in step while scrolling
+                                UpdateEditorOverlay(); // keep the markers in step while scrolling
                             }
                         }
-                    });
+                    };
+                    viewer.ViewChanged([onViewChanged](auto&&, auto&&) { onViewChanged(); });
+                    // The extent changes when the text is laid out again, e.g. after word wrap is turned on or off,
+                    // which can be after the change that caused it has finished.
+                    viewer.RegisterPropertyChangedCallback(ScrollViewer::ExtentHeightProperty(), [onViewChanged](auto&&, auto&&) { onViewChanged(); });
+                    viewer.RegisterPropertyChangedCallback(ScrollViewer::ExtentWidthProperty(), [onViewChanged](auto&&, auto&&) { onViewChanged(); });
                 }
             }
             ScheduleRepaint(d);
@@ -1492,7 +1516,7 @@ namespace winrt::MyNotepad::implementation
         StatusMessageText().Text(L"");
         UpdateTitle();
         UpdateStatusBar();
-        UpdateWhitespaceOverlay();
+        UpdateEditorOverlay();
         if (current)
         {
             FocusEditor(current);
@@ -1588,7 +1612,7 @@ namespace winrt::MyNotepad::implementation
     void MainWindow::ShowWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
     {
         m_showWhitespace = ShowWhitespaceItem().IsChecked();
-        UpdateWhitespaceOverlay();
+        UpdateEditorOverlay();
     }
 
     void MainWindow::Save_Click(IInspectable const&, RoutedEventArgs const&)
@@ -1796,6 +1820,8 @@ namespace winrt::MyNotepad::implementation
         editor.FontWeight(m_fontBold ? Microsoft::UI::Text::FontWeights::Bold() : Microsoft::UI::Text::FontWeights::Normal());
         editor.FontStyle(m_fontItalic ? Windows::UI::Text::FontStyle::Italic : Windows::UI::Text::FontStyle::Normal);
         editor.TextWrapping(m_wordWrap ? TextWrapping::Wrap : TextWrapping::NoWrap);
+        // With word wrap, room on the right for the wrap markers (see DrawWrapMarkers).
+        editor.Padding(Thickness{ EditorPadding, 8, EditorPadding + (m_wordWrap ? WrapMarkerWidth : 0), 8 });
 
         // Set the font name and size on the existing text and on the default format for new text too,
         // since text that has been coloured carries its own character formatting.
@@ -2027,7 +2053,7 @@ namespace winrt::MyNotepad::implementation
                 }
                 if (d == CurrentDocument())
                 {
-                    UpdateWhitespaceOverlay(); // after layout, so it matches the text
+                    UpdateEditorOverlay(); // after layout, so it matches the text
                 }
             }
         });
@@ -2043,22 +2069,31 @@ namespace winrt::MyNotepad::implementation
         bool available = m_fontMonospaced && !m_wordWrap;
         ShowWhitespaceItem().IsEnabled(available);
         ToolTipService::SetToolTip(ShowWhitespaceItem(), available ? nullptr : box_value(L"Needs a monospaced font with word wrap off"));
-        UpdateWhitespaceOverlay();
+        UpdateEditorOverlay();
     }
 
-    void MainWindow::UpdateWhitespaceOverlay()
+    void MainWindow::UpdateEditorOverlay()
     {
-        auto overlay = WhitespaceOverlay();
+        auto overlay = EditorOverlay();
         overlay.Children().Clear();
 
         auto doc = CurrentDocument();
-        if (!m_showWhitespace || m_wordWrap || !m_fontMonospaced || !doc || !doc->ScrollViewer)
+        if (!doc || !doc->ScrollViewer)
         {
             return;
         }
         auto viewer = doc->ScrollViewer;
         auto presenter = FindDescendant<ScrollContentPresenter>(viewer);
         if (!presenter || presenter.ActualHeight() <= 0)
+        {
+            return;
+        }
+        if (m_wordWrap)
+        {
+            DrawWrapMarkers(doc, presenter);
+            return;
+        }
+        if (!m_showWhitespace || !m_fontMonospaced)
         {
             return;
         }
@@ -2173,6 +2208,134 @@ namespace winrt::MyNotepad::implementation
         path.Stroke(brush);
         path.StrokeThickness(1);
         overlay.Children().Append(path);
+    }
+
+    void MainWindow::DrawWrapMarkers(std::shared_ptr<Document> const& doc, ScrollContentPresenter const& presenter)
+    {
+        // Marks each display row that continues on the next row with a ↵ in the editor's right padding.
+        // RichEdit's Line unit is a display row, so a row whose range doesn't end with a line break has wrapped.
+        // Only rows on screen are examined, and each one's position comes from RichEdit: asking about rows far
+        // outside the view makes RichEdit wrap the whole document at once, which on a large file stops it drawing.
+        auto overlay = EditorOverlay();
+        auto viewer = doc->ScrollViewer;
+        auto document = doc->Editor.Document();
+        auto text = EditorText(doc->Editor);
+        auto length = static_cast<int>(text.size());
+        if (length == 0 || viewer.ExtentHeight() <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            // Where a row is, relative to the top of the view. RichEdit measures from the top of the document,
+            // as the ScrollViewer around it does the scrolling.
+            auto scrollY = static_cast<float>(viewer.VerticalOffset());
+            auto rowRect = [&](Microsoft::UI::Text::ITextRange const& row)
+            {
+                int start = row.StartPosition();
+                Windows::Foundation::Rect rect{};
+                int hit = 0;
+                document.GetRange(start, std::min(start + 1, length)).GetRect(PointOptions::ClientCoordinates, rect, hit);
+                rect.Y -= scrollY;
+                return rect;
+            };
+
+            // Start from the same fraction of the text as the scroll position, then move by rows to the first
+            // row in view. Rows are all the same height, so the distance says how many rows to move.
+            double height = presenter.ActualHeight();
+            auto guess = static_cast<int>(viewer.VerticalOffset() / viewer.ExtentHeight() * length);
+            auto row = document.GetRange(guess, guess);
+            row.StartOf(TextRangeUnit::Line, false);
+            for (int attempt = 0; attempt < 20; ++attempt)
+            {
+                auto rect = rowRect(row);
+                if (rect.Height <= 0)
+                {
+                    return;
+                }
+                int rows = 0;
+                if (rect.Y > 0.5)
+                {
+                    rows = -std::max(1, static_cast<int>(std::ceil(rect.Y / rect.Height - 0.01))); // below the top: back up
+                }
+                else if (rect.Y + rect.Height <= 0.5)
+                {
+                    rows = std::max(1, static_cast<int>(-rect.Y / rect.Height)); // above the top: go forward
+                }
+                if (rows == 0 || row.Move(TextRangeUnit::Line, rows) == 0)
+                {
+                    break;
+                }
+            }
+
+            auto origin = presenter.TransformToVisual(overlay).TransformPoint({ 0, 0 });
+            double width = presenter.ActualWidth();
+            double rightPadding = doc->Editor.Padding().Right;
+
+            // The markers sit in the right padding, just left of the vertical scrollbar, which is drawn over
+            // the padding and widens when the pointer is over it.
+            double markerRight = origin.X + width + rightPadding - 2;
+            if (auto bar = FindVerticalScrollBar(viewer); bar && bar.Visibility() == Visibility::Visible && bar.ActualWidth() > 0)
+            {
+                markerRight = std::min(markerRight, static_cast<double>(bar.TransformToVisual(overlay).TransformPoint({ 0, 0 }).X) - 2);
+            }
+
+            // The clip includes the padding.
+            RectangleGeometry clip;
+            clip.Rect({ origin.X, origin.Y, static_cast<float>(width + rightPadding), static_cast<float>(height) });
+            overlay.Clip(clip);
+
+            GeometryGroup shapes;
+            auto line = [&](double x1, double y1, double x2, double y2)
+            {
+                LineGeometry geometry;
+                geometry.StartPoint({ static_cast<float>(x1), static_cast<float>(y1) });
+                geometry.EndPoint({ static_cast<float>(x2), static_cast<float>(y2) });
+                shapes.Children().Append(geometry);
+            };
+
+            for (int count = 0; count < 1000; ++count)
+            {
+                auto rect = rowRect(row);
+                if (rect.Y >= height)
+                {
+                    break;
+                }
+                row.Expand(TextRangeUnit::Line);
+                int end = row.EndPosition();
+                if (end <= row.StartPosition() || end >= length)
+                {
+                    break; // the last row
+                }
+                if (text[end - 1] != L'\r')
+                {
+                    // ↵: down from the top right, then left to an arrowhead.
+                    double size = std::clamp(rect.Height * 0.5, 4.0, WrapMarkerWidth - 4);
+                    double right = markerRight;
+                    double left = right - size;
+                    double y = origin.Y + rect.Y + rect.Height / 2;
+                    double bottom = y + size / 4;
+                    double head = size / 3;
+                    line(right, y - size / 2, right, bottom);
+                    line(right, bottom, left, bottom);
+                    line(left, bottom, left + head, bottom - head);
+                    line(left, bottom, left + head, bottom + head);
+                }
+                row.SetRange(end, end);
+            }
+
+            Windows::UI::Color color{ 0x80, 0x80, 0x80, 0x80 };
+            Shapes::Path path;
+            path.Data(shapes);
+            path.Stroke(SolidColorBrush{ color });
+            path.StrokeThickness(1);
+            overlay.Children().Append(path);
+        }
+        catch (hresult_error const&)
+        {
+            // Markers are a convenience; leave them off if RichEdit can't report the rows.
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
