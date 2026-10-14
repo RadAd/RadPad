@@ -927,7 +927,7 @@ namespace winrt::MyNotepad::implementation
         tab.IconSource(icon);
 
         doc->Tab = tab;
-        tab.ContextFlyout(CreateTabMenu(weakDoc));
+        tab.ContextFlyout(RootGrid().Resources().Lookup(box_value(L"TabMenu")).as<MenuFlyout>());
         m_documents.push_back(doc);
         EditorHost().Children().Append(editor);
         UpdateDocumentState(doc);
@@ -1343,36 +1343,74 @@ namespace winrt::MyNotepad::implementation
         Tabs().SelectedItem(keep->Tab);
     }
 
-    MenuFlyout MainWindow::CreateTabMenu(std::weak_ptr<Document> weakDoc)
+    void MainWindow::TabMenu_Opening(IInspectable const& sender, IInspectable const&)
     {
-        MenuFlyout menu;
-        auto addItem = [&](wchar_t const* text, std::function<void(std::shared_ptr<Document> const&)> action)
+        // The menu is shared by all tabs; Target is the tab that was right-clicked.
+        auto menu = sender.as<MenuFlyout>();
+        auto doc = FindDocument(menu.Target());
+        m_tabMenuDocument = doc;
+        if (!doc)
         {
-            MenuFlyoutItem item;
-            item.Text(text);
-            item.Click([weakDoc, action](auto&&, auto&&)
-            {
-                if (auto doc = weakDoc.lock())
-                {
-                    action(doc);
-                }
-            });
-            menu.Items().Append(item);
-            return item;
-        };
+            return;
+        }
 
-        auto copyName = addItem(L"Copy file name", [](auto const& doc) { CopyTextToClipboard(doc->DisplayName()); });
-        auto copyPath = addItem(L"Copy full path", [](auto const& doc) { CopyTextToClipboard(doc->Path); });
-        auto openFolder = addItem(L"Open containing folder", [this](auto const& doc) { OpenContainingFolder(doc->Path); });
-        menu.Items().Append(MenuFlyoutSeparator{});
-        addItem(L"Close", [this](auto const& doc) { CloseDocumentAsync(doc); });
-        auto closeOthers = addItem(L"Close others", [this](auto const& doc)
+        uint32_t index = 0;
+        Tabs().TabItems().IndexOf(doc->Tab, index);
+        for (auto const& entry : menu.Items())
+        {
+            auto item = entry.try_as<MenuFlyoutItem>();
+            if (!item)
+            {
+                continue;
+            }
+            auto command = unbox_value_or<hstring>(item.Tag(), L"");
+            if (command == L"TabCopyName" || command == L"TabCopyPath" || command == L"TabOpenFolder")
+            {
+                item.IsEnabled(!doc->Path.empty()); // an untitled document has no file name or folder yet
+            }
+            else if (command == L"TabCloseOthers")
+            {
+                item.IsEnabled(m_documents.size() > 1);
+            }
+            else if (command == L"TabCloseRight")
+            {
+                item.IsEnabled(index + 1 < Tabs().TabItems().Size());
+            }
+        }
+    }
+
+    void MainWindow::TabMenu_Click(IInspectable const& sender, RoutedEventArgs const&)
+    {
+        auto doc = m_tabMenuDocument.lock();
+        if (!doc)
+        {
+            return;
+        }
+
+        auto command = unbox_value<hstring>(sender.as<FrameworkElement>().Tag());
+        if (command == L"TabCopyName")
+        {
+            CopyTextToClipboard(doc->DisplayName());
+        }
+        else if (command == L"TabCopyPath")
+        {
+            CopyTextToClipboard(doc->Path);
+        }
+        else if (command == L"TabOpenFolder")
+        {
+            OpenContainingFolder(doc->Path);
+        }
+        else if (command == L"TabClose")
+        {
+            CloseDocumentAsync(doc);
+        }
+        else if (command == L"TabCloseOthers")
         {
             std::vector<std::shared_ptr<Document>> others;
             std::copy_if(m_documents.begin(), m_documents.end(), std::back_inserter(others), [&](auto const& d) { return d != doc; });
             CloseDocumentsAsync(std::move(others), doc);
-        });
-        auto closeRight = addItem(L"Close tabs to the right", [this](auto const& doc)
+        }
+        else if (command == L"TabCloseRight")
         {
             // In tab order, which can differ from m_documents after tabs are dragged.
             std::vector<std::shared_ptr<Document>> right;
@@ -1388,26 +1426,7 @@ namespace winrt::MyNotepad::implementation
                 }
             }
             CloseDocumentsAsync(std::move(right), doc);
-        });
-
-        // An untitled document has no file name or folder yet.
-        menu.Opening([this, weakDoc, copyName, copyPath, openFolder, closeOthers, closeRight](auto&&, auto&&)
-        {
-            auto doc = weakDoc.lock();
-            if (!doc)
-            {
-                return;
-            }
-            bool hasPath = !doc->Path.empty();
-            copyName.IsEnabled(hasPath);
-            copyPath.IsEnabled(hasPath);
-            openFolder.IsEnabled(hasPath);
-            uint32_t index = 0;
-            Tabs().TabItems().IndexOf(doc->Tab, index);
-            closeOthers.IsEnabled(m_documents.size() > 1);
-            closeRight.IsEnabled(index + 1 < Tabs().TabItems().Size());
-        });
-        return menu;
+        }
     }
 
     void MainWindow::OpenContainingFolder(std::wstring const& path)

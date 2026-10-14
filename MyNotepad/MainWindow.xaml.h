@@ -66,6 +66,8 @@ namespace winrt::MyNotepad::implementation
         void LineEnding_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
         void FindBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void ReplaceBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
+        void TabMenu_Opening(Windows::Foundation::IInspectable const& sender, Windows::Foundation::IInspectable const& e);
+        void TabMenu_Click(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::RoutedEventArgs const& e);
 
     private:
         // Documents and tabs
@@ -90,7 +92,6 @@ namespace winrt::MyNotepad::implementation
         fire_and_forget CloseDocumentAsync(std::shared_ptr<Document> doc);
         fire_and_forget CloseDocumentsAsync(std::vector<std::shared_ptr<Document>> docs, std::shared_ptr<Document> keep);
         void RemoveDocument(std::shared_ptr<Document> const& doc);
-        Microsoft::UI::Xaml::Controls::MenuFlyout CreateTabMenu(std::weak_ptr<Document> weakDoc);
         void OpenContainingFolder(std::wstring const& path);
         void SelectAdjacentTab(int delta);
         void SelectTabAt(int index);
@@ -169,6 +170,7 @@ namespace winrt::MyNotepad::implementation
         void SaveSettings();
 
         std::vector<std::shared_ptr<Document>> m_documents;
+        std::weak_ptr<Document> m_tabMenuDocument; // the tab whose right-click menu is open
         std::wstring m_fontFamily{ L"Consolas" };
         double m_fontPoints{ 11.0 };
         bool m_fontBold{ false };

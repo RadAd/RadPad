@@ -36,6 +36,17 @@
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="Background" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
             </Style>
+
+            <!-- Right-click menu shared by all tabs. Items act on the tab that was right-clicked; the Tag names the command. -->
+            <MenuFlyout x:Key="TabMenu" Opening="TabMenu_Opening">
+                <MenuFlyoutItem Text="Copy file name" Tag="TabCopyName" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Copy full path" Tag="TabCopyPath" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Open containing folder" Tag="TabOpenFolder" Click="TabMenu_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Close" Tag="TabClose" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Close others" Tag="TabCloseOthers" Click="TabMenu_Click" />
+                <MenuFlyoutItem Text="Close tabs to the right" Tag="TabCloseRight" Click="TabMenu_Click" />
+            </MenuFlyout>
         </Grid.Resources>
 
         <Grid.RowDefinitions>
