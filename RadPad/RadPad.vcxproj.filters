@@ -62,6 +62,9 @@
     <None Include="Languages\ini.json">
       <Filter>Languages</Filter>
     </None>
+    <None Include="Languages\innosetup.json">
+      <Filter>Languages</Filter>
+    </None>
     <None Include="Languages\java.json">
       <Filter>Languages</Filter>
     </None>

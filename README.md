@@ -49,7 +49,7 @@ The version is set in `RadPad/Version.h`, and only there. It's used for the exe'
 - **View > Highlight trailing whitespace** (on by default) shades spaces and tabs at the ends of lines, including lines that are only whitespace. Whitespace ending at the cursor isn't shaded, so it doesn't flash while you type.
 - **View > Rainbow brackets** (on by default) colours `()`, `[]` and `{}` in code by how deeply they're nested, cycling through three colours.
 - With word wrap on, a `↵` marker in the right margin shows each row that continues on the next row, so wrapped lines can be told apart from separate lines.
-- Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Colours come from the colour theme chosen under **View > Color theme**: Visual Studio (the default), GitHub, Solarized, Monokai or One Dark, or your own (see below). Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
+- Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Inno Setup (`.iss`), Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Colours come from the colour theme chosen under **View > Color theme**: Visual Studio (the default), GitHub, Solarized, Monokai or One Dark, or your own (see below). Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
 - Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the RadPad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting RadPad without files always opens a new window.
 - **File > Recent files** lists the last 10 files opened or saved, newest first. Choosing a file that no longer exists removes it from the list.
 - The same files appear under **Recent** when you right-click RadPad on the taskbar. A file removed there with **Remove from this list** is also removed from **File > Recent files**.
@@ -114,6 +114,7 @@ Lists such as `keywords` can be either an array of strings or a single string of
 | `bangMacros` | `true` for Rust-style `name!` macros. |
 | `ignoreCase` | `true` to match keywords and types regardless of case. |
 | `lineComments` | Markers that start a comment running to the end of the line, e.g. `["//"]`. |
+| `lineStartComments` | Markers that start a comment only at the start of a line (after any indentation), e.g. `[";"]` in Inno Setup scripts, where `;` also separates values within a line. |
 | `blockComment` | Start and end markers of block comments, e.g. `["/*", "*/"]`. |
 | `strings` | Characters that delimit single-line strings. Default `"\""`; use `""` for none. |
 | `multilineStrings` | Characters that delimit strings that can span lines, e.g. `` "`" `` for JavaScript template strings. |

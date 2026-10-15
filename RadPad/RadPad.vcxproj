@@ -179,6 +179,9 @@
     <None Include="Languages\ini.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
+    <None Include="Languages\innosetup.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
     <None Include="Languages\java.json">
       <DeploymentContent>true</DeploymentContent>
     </None>

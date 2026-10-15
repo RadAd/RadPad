@@ -40,6 +40,7 @@ namespace syntax
             bool UpperCaseMacros = false;         // ALL_CAPS words are macros
             bool BangMacros = false;              // Rust name! macros
             std::vector<std::wstring> LineComments;
+            std::vector<std::wstring> LineStartComments; // comment markers only at the start of a line, e.g. ; in Inno Setup
             std::wstring BlockStart;
             std::wstring BlockEnd;
             std::wstring Quotes = L"\"";          // delimiters of single-line strings
@@ -341,9 +342,11 @@ namespace syntax
             return npos;
         }
 
-        bool StartsLineComment(LanguageDefinition const& lang, Scanner const& s, size_t i)
+        bool StartsLineComment(LanguageDefinition const& lang, Scanner const& s, size_t i, bool atLineStart)
         {
-            return std::any_of(lang.LineComments.begin(), lang.LineComments.end(), [&](auto const& marker) { return s.StartsWith(i, marker); });
+            auto starts = [&](auto const& marker) { return s.StartsWith(i, marker); };
+            return std::any_of(lang.LineComments.begin(), lang.LineComments.end(), starts)
+                || (atLineStart && std::any_of(lang.LineStartComments.begin(), lang.LineStartComments.end(), starts));
         }
 
         // Colours the names of types and macros declared in the text, wherever they're used.
@@ -474,7 +477,7 @@ namespace syntax
                     i = end;
                     continue;
                 }
-                if (StartsLineComment(lang, s, i))
+                if (StartsLineComment(lang, s, i, atLineStart))
                 {
                     size_t end = s.LineEnd(i);
                     s.Fill(i, end, TokenKind::Comment);
@@ -1312,6 +1315,7 @@ namespace syntax
             lang.BangMacros = ReadBool(json, L"bangMacros");
 
             lang.LineComments = ReadList(json, L"lineComments");
+            lang.LineStartComments = ReadList(json, L"lineStartComments");
             auto block = ReadList(json, L"blockComment");
             if (!block.empty())
             {
