@@ -70,6 +70,18 @@ namespace
     }
 
     // Lowercases in place; CharLowerBuff never changes the length, so indices stay aligned with the original.
+    // Menu icons for items built in code, from the Segoe Fluent Icons font like those in MainWindow.xaml.
+    constexpr wchar_t FolderGlyph = L'\xE838';
+    constexpr wchar_t RefreshGlyph = L'\xE72C';
+    constexpr wchar_t EditGlyph = L'\xE70F';
+
+    FontIcon MenuIcon(wchar_t glyph)
+    {
+        FontIcon icon;
+        icon.Glyph(std::wstring(1, glyph));
+        return icon;
+    }
+
     std::wstring ToLower(std::wstring text)
     {
         if (!text.empty())
@@ -1702,6 +1714,7 @@ namespace winrt::RadPad::implementation
         items.Append(MenuFlyoutSeparator{});
         MenuFlyoutItem edit;
         edit.Text(L"Edit tools...");
+        edit.Icon(MenuIcon(EditGlyph));
         edit.Click([this](auto&&, auto&&) { EditTools(); });
         items.Append(edit);
     }
@@ -3488,16 +3501,17 @@ namespace winrt::RadPad::implementation
         build(LanguageFlyout().Items(), L"LanguageStatus");
 
         // Commands for people editing the definitions.
-        auto command = [this](wchar_t const* text, std::function<void()> action)
+        auto command = [this](wchar_t const* text, wchar_t glyph, std::function<void()> action)
         {
             MenuFlyoutItem item;
             item.Text(text);
+            item.Icon(MenuIcon(glyph));
             item.Click([action](auto&&, auto&&) { action(); });
             LanguageMenu().Items().Append(item);
         };
         LanguageMenu().Items().Append(MenuFlyoutSeparator{});
-        command(L"Open language folder", [this] { OpenLanguageFolder(); });
-        command(L"Reload languages", [this] { ReloadLanguages(); });
+        command(L"Open language folder", FolderGlyph, [this] { OpenLanguageFolder(); });
+        command(L"Reload languages", RefreshGlyph, [this] { ReloadLanguages(); });
     }
 
     void MainWindow::ReloadLanguages()
@@ -3577,16 +3591,17 @@ namespace winrt::RadPad::implementation
         }
 
         // Commands for people editing the themes.
-        auto command = [&](wchar_t const* text, std::function<void()> action)
+        auto command = [&](wchar_t const* text, wchar_t glyph, std::function<void()> action)
         {
             MenuFlyoutItem item;
             item.Text(text);
+            item.Icon(MenuIcon(glyph));
             item.Click([action](auto&&, auto&&) { action(); });
             items.Append(item);
         };
         items.Append(MenuFlyoutSeparator{});
-        command(L"Open themes folder", [this] { OpenThemeFolder(); });
-        command(L"Reload themes", [this] { ReloadThemes(); });
+        command(L"Open themes folder", FolderGlyph, [this] { OpenThemeFolder(); });
+        command(L"Reload themes", RefreshGlyph, [this] { ReloadThemes(); });
     }
 
     void MainWindow::SetColorTheme(std::wstring const& name)

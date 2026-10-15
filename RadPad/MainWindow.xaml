@@ -40,11 +40,19 @@
 
             <!-- Right-click menu shared by all tabs. Items act on the tab that was right-clicked. -->
             <MenuFlyout x:Key="TabMenu" Opening="TabMenu_Opening">
-                <MenuFlyoutItem Text="Copy file name" x:Name="TabCopyNameItem" Click="TabCopyName_Click" />
-                <MenuFlyoutItem Text="Copy full path" x:Name="TabCopyPathItem" Click="TabCopyPath_Click" />
-                <MenuFlyoutItem Text="Open containing folder" x:Name="TabOpenFolderItem" Click="TabOpenFolder_Click" />
+                <MenuFlyoutItem Text="Copy file name" x:Name="TabCopyNameItem" Click="TabCopyName_Click">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Copy full path" x:Name="TabCopyPathItem" Click="TabCopyPath_Click">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Open containing folder" x:Name="TabOpenFolderItem" Click="TabOpenFolder_Click">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Close" x:Name="TabCloseItem" Click="TabClose_Click" />
+                <MenuFlyoutItem Text="Close" x:Name="TabCloseItem" Click="TabClose_Click">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE711;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Close others" x:Name="TabCloseOthersItem" Click="TabCloseOthers_Click" />
                 <MenuFlyoutItem Text="Close tabs to the right" x:Name="TabCloseRightItem" Click="TabCloseRight_Click" />
             </MenuFlyout>
@@ -98,80 +106,111 @@
             <MenuBar x:Name="MainMenu" Grid.Row="0">
                 <MenuBarItem Title="File">
                     <MenuFlyoutItem Text="New tab" Click="NewTab_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE710;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="N" />
                             <KeyboardAccelerator Modifiers="Control" Key="T" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Open..." Click="Open_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="O" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Save" Click="Save_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74E;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Save as..." Click="SaveAs_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE792;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control,Shift" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Save all" Click="SaveAll_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE78C;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control,Menu" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
                     <!-- Items are added in code from the saved list. -->
-                    <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent files" />
+                    <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent files">
+                        <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE81C;" /></MenuFlyoutSubItem.Icon>
+                    </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator />
                     <!-- Ctrl+W / Ctrl+F4 are handled in RootGrid_PreviewKeyDown so the TabView doesn't also act on them. -->
-                    <MenuFlyoutItem Text="Close tab" Click="CloseTab_Click" KeyboardAcceleratorTextOverride="Ctrl+W" />
+                    <MenuFlyoutItem Text="Close tab" Click="CloseTab_Click" KeyboardAcceleratorTextOverride="Ctrl+W">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE711;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Exit" Click="Exit_Click" />
                 </MenuBarItem>
 
                 <MenuBarItem Title="Edit">
                     <!-- The editor handles these shortcuts natively, so only the shortcut text is shown. -->
-                    <MenuFlyoutItem Text="Undo" Click="Undo_Click" KeyboardAcceleratorTextOverride="Ctrl+Z" />
-                    <MenuFlyoutItem Text="Redo" Click="Redo_Click" KeyboardAcceleratorTextOverride="Ctrl+Y" />
+                    <MenuFlyoutItem Text="Undo" Click="Undo_Click" KeyboardAcceleratorTextOverride="Ctrl+Z">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A7;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Redo" Click="Redo_Click" KeyboardAcceleratorTextOverride="Ctrl+Y">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A6;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Cut" Click="Cut_Click" KeyboardAcceleratorTextOverride="Ctrl+X" />
-                    <MenuFlyoutItem Text="Copy" Click="Copy_Click" KeyboardAcceleratorTextOverride="Ctrl+C" />
-                    <MenuFlyoutItem Text="Paste" Click="Paste_Click" KeyboardAcceleratorTextOverride="Ctrl+V" />
-                    <MenuFlyoutItem Text="Delete" Click="Delete_Click" KeyboardAcceleratorTextOverride="Del" />
+                    <MenuFlyoutItem Text="Cut" Click="Cut_Click" KeyboardAcceleratorTextOverride="Ctrl+X">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C6;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Copy" Click="Copy_Click" KeyboardAcceleratorTextOverride="Ctrl+C">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Paste" Click="Paste_Click" KeyboardAcceleratorTextOverride="Ctrl+V">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE77F;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Text="Delete" Click="Delete_Click" KeyboardAcceleratorTextOverride="Del">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="Find" Click="Find_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE721;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="F" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Find next" Click="FindNext_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74B;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Key="F3" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Find previous" Click="FindPrevious_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74A;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Shift" Key="F3" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Replace" Click="Replace_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AB;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="H" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Go to..." Click="GoTo_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AD;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="G" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
                     <!-- Ctrl+] (and Ctrl+Shift+] to select) are handled in the editor's key handler. -->
-                    <MenuFlyoutItem Text="Go to matching bracket" Click="MatchingBracket_Click" KeyboardAcceleratorTextOverride="Ctrl+]" />
+                    <MenuFlyoutItem Text="Go to matching bracket" Click="MatchingBracket_Click" KeyboardAcceleratorTextOverride="Ctrl+]">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE943;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Select all" Click="SelectAll_Click" KeyboardAcceleratorTextOverride="Ctrl+A" />
+                    <MenuFlyoutItem Text="Select all" Click="SelectAll_Click" KeyboardAcceleratorTextOverride="Ctrl+A">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B3;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <MenuFlyoutItem Text="Time/Date" Click="TimeDate_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE787;" /></MenuFlyoutItem.Icon>
                         <MenuFlyoutItem.KeyboardAccelerators>
                             <KeyboardAccelerator Key="F5" />
                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -179,36 +218,55 @@
                 </MenuBarItem>
 
                 <MenuBarItem Title="Format">
-                    <ToggleMenuFlyoutItem x:Name="WordWrapItem" Text="Word wrap" Click="WordWrap_Click" />
-                    <MenuFlyoutItem Text="Font..." Click="Font_Click" />
+                    <ToggleMenuFlyoutItem x:Name="WordWrapItem" Text="Word wrap" Click="WordWrap_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE751;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
+                    <MenuFlyoutItem Text="Font..." Click="Font_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8D2;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                     <!-- Items are added in code, one per language. -->
-                    <MenuFlyoutSubItem x:Name="LanguageMenu" Text="Language" />
+                    <MenuFlyoutSubItem x:Name="LanguageMenu" Text="Language">
+                        <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE8C1;" /></MenuFlyoutSubItem.Icon>
+                    </MenuFlyoutSubItem>
                     <!-- Tab key behaviour and tab width; items are added in code. -->
-                    <MenuFlyoutSubItem x:Name="TabsMenu" Text="Tabs" />
+                    <MenuFlyoutSubItem x:Name="TabsMenu" Text="Tabs">
+                        <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE8A0;" /></MenuFlyoutSubItem.Icon>
+                    </MenuFlyoutSubItem>
                 </MenuBarItem>
 
                 <MenuBarItem Title="View">
                     <MenuFlyoutSubItem Text="Zoom">
+                        <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE71E;" /></MenuFlyoutSubItem.Icon>
                         <!-- Accelerators for these are added in code (Ctrl+Plus/Minus need OEM key codes). -->
-                        <MenuFlyoutItem x:Name="ZoomInItem" Text="Zoom in" Click="ZoomIn_Click" KeyboardAcceleratorTextOverride="Ctrl+Plus" />
-                        <MenuFlyoutItem x:Name="ZoomOutItem" Text="Zoom out" Click="ZoomOut_Click" KeyboardAcceleratorTextOverride="Ctrl+Minus" />
+                        <MenuFlyoutItem x:Name="ZoomInItem" Text="Zoom in" Click="ZoomIn_Click" KeyboardAcceleratorTextOverride="Ctrl+Plus">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8A3;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="ZoomOutItem" Text="Zoom out" Click="ZoomOut_Click" KeyboardAcceleratorTextOverride="Ctrl+Minus">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE71F;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                         <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Click="ZoomReset_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
                     </MenuFlyoutSubItem>
                     <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True" />
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
                     <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
                     <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
-                    <ToggleMenuFlyoutItem x:Name="RainbowBracketsItem" Text="Rainbow brackets" Click="RainbowBrackets_Click" />
+                    <ToggleMenuFlyoutItem x:Name="RainbowBracketsItem" Text="Rainbow brackets" Click="RainbowBrackets_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE943;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
                     <MenuFlyoutSeparator />
                     <!-- Items are added in code, one per loaded theme. -->
-                    <MenuFlyoutSubItem x:Name="ColorThemeMenu" Text="Color theme" />
+                    <MenuFlyoutSubItem x:Name="ColorThemeMenu" Text="Color theme">
+                        <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE790;" /></MenuFlyoutSubItem.Icon>
+                    </MenuFlyoutSubItem>
                 </MenuBarItem>
 
                 <!-- Items are added in code from the user's tools file (Tools > Edit tools). -->
                 <MenuBarItem x:Name="ToolsMenu" Title="Tools" />
 
                 <MenuBarItem Title="Help">
-                    <MenuFlyoutItem Text="About RadPad" Click="About_Click" />
+                    <MenuFlyoutItem Text="About RadPad" Click="About_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                 </MenuBarItem>
             </MenuBar>
 
