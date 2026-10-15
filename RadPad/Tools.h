@@ -12,6 +12,8 @@ namespace tools
         bool SaveFirst{ true };        // save unsaved changes before running
         std::wstring Icon;             // optional: an image, or "file,index" for an icon in an .exe or .dll
         std::wstring Glyph;            // optional: a character from the Segoe Fluent Icons font
+        bool IsFolder{ false };        // a submenu of Children rather than a tool to run
+        std::vector<Tool> Children;
     };
 
     // What the placeholders stand for when a tool runs.

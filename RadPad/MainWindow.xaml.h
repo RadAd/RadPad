@@ -176,6 +176,7 @@ namespace winrt::RadPad::implementation
         bool ReloadDocument(std::shared_ptr<Document> const& doc);
         fire_and_forget AskToReloadAsync(std::shared_ptr<Document> doc, std::optional<std::pair<uint64_t, uint64_t>> stamp);
         void BuildToolsMenu();
+        void AddToolItems(Windows::Foundation::Collections::IVector<Microsoft::UI::Xaml::Controls::MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize);
         void RunTool(tools::Tool const& tool);
         void EditTools();
 

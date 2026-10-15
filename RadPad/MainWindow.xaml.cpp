@@ -1609,41 +1609,66 @@ namespace winrt::RadPad::implementation
         }
         // Menu icons are 16 pixels at 100% scaling; load them at the screen's size so they're sharp.
         int iconSize = MulDiv(16, static_cast<int>(GetDpiForWindow(WindowHandle())), 96);
-        for (auto const& tool : m_tools)
-        {
-            MenuFlyoutItem item;
-            item.Text(tool.Name);
-            std::vector<uint8_t> pixels;
-            if (!tool.Glyph.empty())
-            {
-                FontIcon icon;
-                icon.Glyph(tool.Glyph);
-                item.Icon(icon);
-            }
-            else if (tools::LoadToolIcon(tool, iconSize, pixels))
-            {
-                Media::Imaging::WriteableBitmap bitmap{ iconSize, iconSize };
-                memcpy(bitmap.PixelBuffer().data(), pixels.data(), pixels.size());
-                bitmap.Invalidate();
-                ImageIcon icon;
-                icon.Source(bitmap);
-                item.Icon(icon);
-            }
-            item.Click([this, tool](auto&&, auto&&) { RunTool(tool); });
-            items.Append(item);
-        }
+        AddToolItems(items, m_tools, iconSize);
         if (m_tools.empty())
         {
-            MenuFlyoutItem none;
-            none.Text(L"No tools");
-            none.IsEnabled(false);
-            items.Append(none);
+            items.GetAt(0).as<MenuFlyoutItem>().Text(L"No tools");
         }
         items.Append(MenuFlyoutSeparator{});
         MenuFlyoutItem edit;
         edit.Text(L"Edit tools...");
         edit.Click([this](auto&&, auto&&) { EditTools(); });
         items.Append(edit);
+    }
+
+    void MainWindow::AddToolItems(Collections::IVector<MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize)
+    {
+        // Tools as menu items and folders as submenus, each with its icon.
+        auto iconFor = [iconSize](tools::Tool const& tool) -> IconElement
+        {
+            if (!tool.Glyph.empty())
+            {
+                FontIcon icon;
+                icon.Glyph(tool.Glyph);
+                return icon;
+            }
+            std::vector<uint8_t> pixels;
+            if (!tools::LoadToolIcon(tool, iconSize, pixels))
+            {
+                return nullptr;
+            }
+            Media::Imaging::WriteableBitmap bitmap{ iconSize, iconSize };
+            memcpy(bitmap.PixelBuffer().data(), pixels.data(), pixels.size());
+            bitmap.Invalidate();
+            ImageIcon icon;
+            icon.Source(bitmap);
+            return icon;
+        };
+
+        for (auto const& tool : list)
+        {
+            if (tool.IsFolder)
+            {
+                MenuFlyoutSubItem folder;
+                folder.Text(tool.Name);
+                folder.Icon(iconFor(tool));
+                AddToolItems(folder.Items(), tool.Children, iconSize);
+                items.Append(folder);
+                continue;
+            }
+            MenuFlyoutItem item;
+            item.Text(tool.Name);
+            item.Icon(iconFor(tool));
+            item.Click([this, tool](auto&&, auto&&) { RunTool(tool); });
+            items.Append(item);
+        }
+        if (list.empty())
+        {
+            MenuFlyoutItem empty;
+            empty.Text(L"Empty");
+            empty.IsEnabled(false);
+            items.Append(empty);
+        }
     }
 
     void MainWindow::RunTool(tools::Tool const& tool)

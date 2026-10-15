@@ -172,26 +172,16 @@ namespace tools
             }
             return text;
         }
-    }
 
-    std::vector<Tool> LoadTools(std::wstring const& path, std::vector<std::wstring>& errors)
-    {
-        std::vector<Tool> result;
-        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        // The entries of a "tools" list: tools, and folders with their own "tools" list. label is the
+        // position of the list for error messages ("3 › 2" for the second entry in the third). A bad entry
+        // is reported and skipped; the others still load.
+        std::vector<Tool> ParseToolList(winrt::Windows::Data::Json::JsonArray const& list, std::wstring const& path, std::wstring const& label, std::vector<std::wstring>& errors)
         {
-            return result;
-        }
-        try
-        {
-            auto json = JsonObject::Parse(textfile::Load(path).Text);
-            if (!json.HasKey(L"tools") || json.GetNamedValue(L"tools").ValueType() != JsonValueType::Array)
-            {
-                Invalid(L"\"tools\" must be a list of tools");
-            }
-            auto list = json.GetNamedArray(L"tools");
+            std::vector<Tool> result;
             for (uint32_t i = 0; i < list.Size(); ++i)
             {
-                // A bad entry is reported and skipped; the others still load.
+                auto position = label.empty() ? std::to_wstring(i + 1) : label + L" › " + std::to_wstring(i + 1);
                 try
                 {
                     if (list.GetAt(i).ValueType() != JsonValueType::Object)
@@ -201,6 +191,25 @@ namespace tools
                     auto entry = list.GetObjectAt(i);
                     Tool tool;
                     tool.Name = ReadString(entry, L"name", true);
+                    tool.Icon = ReadString(entry, L"icon", false);
+                    tool.Glyph = ParseGlyph(ReadString(entry, L"glyph", false));
+                    if (entry.HasKey(L"tools"))
+                    {
+                        // A folder: a submenu of the tools it lists.
+                        if (entry.GetNamedValue(L"tools").ValueType() != JsonValueType::Array)
+                        {
+                            Invalid(L"a folder's \"tools\" must be a list of tools");
+                        }
+                        if (entry.HasKey(L"command"))
+                        {
+                            Invalid(L"an entry is either a tool, with a \"command\", or a folder, with \"tools\", not both");
+                        }
+                        tool.IsFolder = true;
+                        tool.Children = ParseToolList(entry.GetNamedArray(L"tools"), path, position, errors);
+                        result.push_back(std::move(tool));
+                        continue;
+                    }
+
                     tool.Command = ReadString(entry, L"command", true);
                     tool.Arguments = entry.HasKey(L"arguments") ? ReadString(entry, L"arguments", false) : L"\"$(FilePath)\"";
                     tool.WorkingDirectory = ReadString(entry, L"workingDirectory", false);
@@ -212,21 +221,37 @@ namespace tools
                         }
                         tool.SaveFirst = entry.GetNamedBoolean(L"saveFirst");
                     }
-                    tool.Icon = ReadString(entry, L"icon", false);
-                    tool.Glyph = ParseGlyph(ReadString(entry, L"glyph", false));
                     result.push_back(std::move(tool));
                 }
                 catch (winrt::hresult_error const& e)
                 {
-                    errors.push_back(std::format(L"{}: tool {}: {}", path, i + 1, std::wstring_view{ e.message() }));
+                    errors.push_back(std::format(L"{}: tool {}: {}", path, position, std::wstring_view{ e.message() }));
                 }
             }
+            return result;
+        }
+    }
+
+    std::vector<Tool> LoadTools(std::wstring const& path, std::vector<std::wstring>& errors)
+    {
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        {
+            return {};
+        }
+        try
+        {
+            auto json = JsonObject::Parse(textfile::Load(path).Text);
+            if (!json.HasKey(L"tools") || json.GetNamedValue(L"tools").ValueType() != JsonValueType::Array)
+            {
+                Invalid(L"\"tools\" must be a list of tools");
+            }
+            return ParseToolList(json.GetNamedArray(L"tools"), path, L"", errors);
         }
         catch (winrt::hresult_error const& e)
         {
             errors.push_back(path + L": " + std::wstring{ e.message() });
+            return {};
         }
-        return result;
     }
 
     std::optional<std::wstring> RunTool(Tool const& tool, FileContext const& file, HWND owner)

@@ -143,7 +143,10 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 {
   "tools": [
     { "name": "Open in VS Code", "command": "code", "arguments": "--goto \"$(FilePath):$(Line):$(Column)\"" },
-    { "name": "Run Python script", "command": "cmd.exe", "arguments": "/k python \"$(FileName)\"" },
+    { "name": "Python", "glyph": "E943", "tools": [
+      { "name": "Run script", "command": "cmd.exe", "arguments": "/k python \"$(FileName)\"" },
+      { "name": "Run tests", "command": "cmd.exe", "arguments": "/k python -m pytest" }
+    ] },
     { "name": "Show in Explorer", "command": "explorer.exe", "arguments": "/select,\"$(FilePath)\"", "saveFirst": false }
   ]
 }
@@ -158,5 +161,6 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 | `saveFirst` | `true` (the default) saves unsaved changes first, so the tool sees what's on screen; `false` runs on the file as last saved. |
 | `icon` | Optional. An image file (`.png`, `.ico` …), a program, or `"file,index"` for one of the icons in an `.exe` or `.dll`, such as `"shell32.dll,4"`. Environment variables like `%ProgramFiles%` work. Without it, the menu shows the icon of the program `command` runs. A `.cmd` launcher in a `bin` folder beside its app (as VS Code installs) shows the app's icon. |
 | `glyph` | Optional. A symbol from Windows' Segoe Fluent Icons font instead of an icon, as a character code such as `"E756"`. |
+| `tools` | Makes the entry a folder: a submenu of the tools (and folders) listed here, instead of a tool with a `command`. A folder can have an `icon` or `glyph`. |
 
 `command`, `arguments` and `workingDirectory` can use `$(FilePath)` (the full path), `$(FileDir)` (its folder), `$(FileName)`, `$(FileNameNoExt)`, `$(Line)` and `$(Column)` (the cursor's position). An untitled document is always saved before a tool runs, as there's no file to give it otherwise.
