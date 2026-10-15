@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "MainWindow.xaml.h"
 #include "Instance.h"
+#include "Version.h"
 #if __has_include("MainWindow.g.cpp")
 #include "MainWindow.g.cpp"
 #endif
@@ -4196,7 +4197,7 @@ namespace winrt::RadPad::implementation
         auto strong = get_strong();
         ContentDialog dialog;
         dialog.Title(box_value(L"About RadPad"));
-        dialog.Content(box_value(L"A tabbed Notepad clone built with WinUI 3 and C++/WinRT."));
+        dialog.Content(box_value(L"Version " RADPAD_VERSION_STRING L"\n\nA tabbed Notepad clone built with WinUI 3 and C++/WinRT."));
         dialog.CloseButtonText(L"OK");
         dialog.DefaultButton(ContentDialogButton::Close);
         co_await ShowDialogAsync(dialog);

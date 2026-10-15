@@ -91,6 +91,10 @@
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <ResourceCompile>
+      <!-- Marks the version resource as a debug build (RadPad.rc). -->
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
@@ -112,6 +116,7 @@
     <ClInclude Include="Syntax.h" />
     <ClInclude Include="Themes.h" />
     <ClInclude Include="Tools.h" />
+    <ClInclude Include="Version.h" />
     <ClInclude Include="TextFile.h" />
     <ClInclude Include="App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
@@ -249,10 +254,24 @@
     MSB8027 and LNK4042 and makes the file recompile on every build. Keep only the first copy.
   -->
   <!--
+    Release builds copy the Visual C++ runtime that RadPad.exe uses into the output folder, so the app runs
+    without the Visual C++ Redistributable being installed. (The Windows App SDK files only use the
+    Universal C Runtime, which is part of Windows.) Microsoft allows this "app-local" copy.
+  -->
+  <Target Name="CopyVCRuntime" AfterTargets="Build" BeforeTargets="CreateZipPackage" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_VCRuntimeFolder Include="$([System.IO.Directory]::GetDirectories('$(VCToolsRedistInstallDir)$(PlatformTarget)', 'Microsoft.VC*.CRT'))" />
+      <_VCRuntimeDll Include="%(_VCRuntimeFolder.Identity)\msvcp140.dll;%(_VCRuntimeFolder.Identity)\vcruntime140.dll;%(_VCRuntimeFolder.Identity)\vcruntime140_1.dll" />
+      <_VCRuntimeDll Remove="@(_VCRuntimeDll)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_VCRuntimeDll)' == ''" Text="The Visual C++ runtime wasn't found under $(VCToolsRedistInstallDir)$(PlatformTarget)." />
+    <Copy SourceFiles="@(_VCRuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
     After a Release build, zip the app for distribution as dist\RadPad-<platform>.zip, containing a
     RadPad folder with everything needed to run it. Files only used during development are left out.
-    The Visual C++ runtime (MSVCP140.dll, VCRUNTIME140.dll) isn't included; target machines need the
-    Visual C++ Redistributable. Set CreateZipPackage=false to skip this step.
+    Set CreateZipPackage=false to skip this step.
   -->
   <PropertyGroup>
     <CreateZipPackage Condition="'$(CreateZipPackage)' == '' and '$(Configuration)' == 'Release'">true</CreateZipPackage>
@@ -271,6 +290,27 @@
     <RemoveDir Directories="$(ZipStagingDir)" />
     <Message Importance="high" Text="$(ProjectName) -> $([System.IO.Path]::GetFullPath('$(ZipPackagePath)'))" />
   </Target>
+  <!--
+    After a Release build, also build an installer, dist\RadPad-<platform>-setup.exe, with Inno Setup
+    (installer\RadPad.iss), if it's installed. Set InnoSetupCompiler to ISCC.exe's path if it's somewhere
+    else, or CreateInstaller=false to skip this step. The installer's version is read from Version.h,
+    the same as the exe's.
+  -->
+  <PropertyGroup>
+    <CreateInstaller Condition="'$(CreateInstaller)' == '' and '$(Configuration)' == 'Release'">true</CreateInstaller>
+    <_VersionHeader>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Version.h'))</_VersionHeader>
+    <RadPadVersion>$([System.Text.RegularExpressions.Regex]::Replace($(_VersionHeader), '(?s).*RADPAD_VERSION_MAJOR\s+(\d+).*', '$1')).$([System.Text.RegularExpressions.Regex]::Replace($(_VersionHeader), '(?s).*RADPAD_VERSION_MINOR\s+(\d+).*', '$1')).$([System.Text.RegularExpressions.Regex]::Replace($(_VersionHeader), '(?s).*RADPAD_VERSION_PATCH\s+(\d+).*', '$1'))</RadPadVersion>
+    <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' and Exists('$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe')">$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+    <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' and Exists('$(ProgramW6432)\Inno Setup 6\ISCC.exe')">$(ProgramW6432)\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+    <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' and Exists('$(LOCALAPPDATA)\Programs\Inno Setup 6\ISCC.exe')">$(LOCALAPPDATA)\Programs\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+  </PropertyGroup>
+  <Target Name="CreateInstaller" AfterTargets="CreateZipPackage" Condition="'$(CreateInstaller)' == 'true'">
+    <Message Importance="high" Condition="'$(InnoSetupCompiler)' == ''" Text="$(ProjectName): Inno Setup 6 wasn't found, so no installer was built." />
+    <Exec Condition="'$(InnoSetupCompiler)' != ''"
+          Command="&quot;$(InnoSetupCompiler)&quot; /Q /DAppVersion=$(RadPadVersion) /DPlatform=$(Platform) &quot;/DSourceDir=$([System.IO.Path]::GetFullPath('$(OutDir)').TrimEnd('\'))&quot; &quot;/DOutputDir=$([System.IO.Path]::GetFullPath('$(ZipPackageDir)').TrimEnd('\'))&quot; &quot;$(MSBuildProjectDirectory)\..\installer\RadPad.iss&quot;" />
+    <Message Importance="high" Condition="'$(InnoSetupCompiler)' != ''" Text="$(ProjectName) -> $([System.IO.Path]::GetFullPath('$(ZipPackageDir)'))$(ProjectName)-$(Platform)-setup.exe" />
+  </Target>
+
   <Target Name="RemoveDuplicateAutoInitializer" AfterTargets="WindowsAppRuntimeAutoInitializer">
     <ItemGroup>
       <_AutoInitializerCpp Include="@(ClCompile)" Condition="'%(ClCompile.Filename)%(ClCompile.Extension)' == 'WindowsAppRuntimeAutoInitializer.cpp'" />

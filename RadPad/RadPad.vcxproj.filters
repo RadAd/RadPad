@@ -30,6 +30,7 @@
     <ClInclude Include="Syntax.h" />
     <ClInclude Include="Themes.h" />
     <ClInclude Include="Tools.h" />
+    <ClInclude Include="Version.h" />
     <ClInclude Include="TextFile.h" />
   </ItemGroup>
   <ItemGroup>

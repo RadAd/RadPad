@@ -11,11 +11,23 @@ Open `RadPad.sln`, choose a platform (x64 / x86 / ARM64), and press F5. NuGet pa
 The app is **unpackaged and self-contained**: the Windows App SDK runtime ships next to `RadPad.exe`, so no MSIX install is needed.
 
 ## Packaging
-Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\RadPad-x64.zip`). It contains a `RadPad` folder with everything needed to run the app. Debug symbols and other build by-products are left out. Unzip it anywhere and run `RadPad.exe`.
+Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\RadPad-x64.zip`). It contains a `RadPad` folder with everything needed to run the app, including the Visual C++ runtime DLLs it uses, so it runs on any Windows 10 or 11 PC without installing anything else. Debug symbols and other build by-products are left out. Unzip it anywhere and run `RadPad.exe`.
 
-- Target machines also need the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) for the same architecture, which the zip doesn't include.
-- To skip the zip, build with `/p:CreateZipPackage=false`. To get a zip from another configuration, build with `/p:CreateZipPackage=true`.
-- The step is the `CreateZipPackage` target at the end of `RadPad.vcxproj`.
+If [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed, a Release build also creates an installer, `dist\RadPad-<platform>-setup.exe`, from `installer\RadPad.iss`. It:
+
+- installs for the current user without administrator rights, into `%LOCALAPPDATA%\Programs\RadPad` (or for all users, if chosen);
+- adds a Start menu shortcut, and optionally a desktop shortcut;
+- adds RadPad to **Open with** for text files and the file types of the built-in languages, without becoming their default program;
+- optionally adds **Edit with RadPad** to every file's right-click menu;
+- installs over an earlier version, closing RadPad first, and has an uninstaller (settings in `%LOCALAPPDATA%\RadPad` are kept).
+
+Build options:
+
+- `/p:CreateZipPackage=false` skips the zip, and `/p:CreateZipPackage=true` makes one from another configuration.
+- `/p:CreateInstaller=false` skips the installer, and `/p:InnoSetupCompiler=<path to ISCC.exe>` uses an Inno Setup installed somewhere unusual.
+- The steps are the `CopyVCRuntime`, `CreateZipPackage` and `CreateInstaller` targets at the end of `RadPad.vcxproj`.
+
+The version is set in `RadPad/Version.h`, and only there. It's used for the exe's version (shown in Explorer under Properties > Details), the About box and the installer.
 
 ## Features
 - Tabs in the title bar: new (Ctrl+N / Ctrl+T / +), close (Ctrl+W, Ctrl+F4), switch to recently used tabs (Ctrl+Tab goes to the previous tab; hold Ctrl and press Tab again to go further back, Ctrl+Shift+Tab to go the other way), jump to a tab (Ctrl+1..9), reorder by dragging
@@ -57,6 +69,8 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 | `App.xaml` / `.cpp` | Application entry point |
 | `RadPad.ico` / `RadPad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
 | `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico` after changing it |
+| `Version.h` | RadPad's version number, used by the exe's version resource, the About box and the installer |
+| `installer/RadPad.iss` | The Inno Setup installer script, built after a Release build if Inno Setup is installed |
 
 ## How highlighting works
 Each tab's editor is a `RichEditBox` used as a plain-text editor. After each edit, `Syntax.cpp` tokenizes the whole document, then `MainWindow` recolours only the characters whose colour changed, and only in and near the visible part of the document. More is coloured as you scroll. Colouring a range is slow in RichEdit, so this keeps typing and opening large files responsive.
