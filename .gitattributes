@@ -1,0 +1,11 @@
+# Line endings: text files are stored with LF in the repository and checked out with CRLF, whatever
+# each machine's core.autocrlf setting is.
+* text=auto eol=crlf
+
+# Binary files: never converted.
+*.ico binary
+*.png binary
+*.jpg binary
+*.zip binary
+*.exe binary
+*.dll binary
