@@ -20,7 +20,7 @@ namespace themes
         };
 
         // JSON keys for the colours, in TokenKind order.
-        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property" };
+        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property", L"macro" };
         static_assert(std::size(ColorKeys) == ColorCount);
 
         Color Rgb(uint32_t rgb)
@@ -44,8 +44,8 @@ namespace themes
         {
             return {
                 DefaultThemeName,
-                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5 }),
-                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE }),
+                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5, 0x6F008A }),
+                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE, 0xBEB7FF }),
             };
         }
 
@@ -81,13 +81,19 @@ namespace themes
 
         Palette ParsePalette(JsonObject const& json, bool dark)
         {
-            // Colours that aren't given are the text colour.
+            // Colours that aren't given are the text colour, except macros, which fall back to the
+            // preprocessor colour (themes written before macros had a colour of their own).
             Palette palette;
             palette.Dark = dark;
             Color text = json.HasKey(L"text") ? ParseColor(json, L"text") : Rgb(dark ? 0xD4D4D4 : 0x000000);
             for (size_t i = 0; i < ColorCount; ++i)
             {
                 palette.Colors[i] = json.HasKey(ColorKeys[i]) ? ParseColor(json, ColorKeys[i]) : text;
+            }
+            auto macro = static_cast<size_t>(syntax::TokenKind::Macro);
+            if (!json.HasKey(ColorKeys[macro]))
+            {
+                palette.Colors[macro] = palette.Colors[static_cast<size_t>(syntax::TokenKind::Preprocessor)];
             }
             if (json.HasKey(L"background"))
             {

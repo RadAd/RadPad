@@ -1,8 +1,11 @@
 {
   "name": "C",
   "extensions": ["c"],
-  "keywords": "auto break case const continue default do else enum extern for goto if inline register restrict return sizeof static struct switch typedef union volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Noreturn _Static_assert _Thread_local true false NULL",
-  "types": "bool char double float int long short signed unsigned void size_t ssize_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t wchar_t FILE",
+  "keywords": "auto break case const continue default do else enum extern for goto if inline register restrict return sizeof static struct switch typedef union volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Noreturn _Static_assert _Thread_local true false",
+  "types": "bool char double float int long short signed unsigned void size_t ssize_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t wchar_t FILE time_t clock_t va_list fpos_t jmp_buf sig_atomic_t wint_t mbstate_t intmax_t uintmax_t div_t ldiv_t lldiv_t max_align_t errno_t",
+  "typeDeclarations": "struct union enum",
+  "macros": "NULL EOF assert errno offsetof stdin stdout stderr BUFSIZ FILENAME_MAX RAND_MAX EXIT_SUCCESS EXIT_FAILURE CHAR_BIT INT_MIN INT_MAX UINT_MAX LONG_MIN LONG_MAX LLONG_MIN LLONG_MAX SIZE_MAX va_start va_arg va_end va_copy setjmp __FILE__ __LINE__ __func__ __DATE__ __TIME__ __COUNTER__ __VA_ARGS__ __STDC__ __STDC_VERSION__ _countof _MSC_VER _WIN32 _WIN64 _DEBUG NDEBUG TRUE FALSE SUCCEEDED FAILED HRESULT_FROM_WIN32 MAKEINTRESOURCE MAKEINTRESOURCEW MAKEWORD MAKELONG LOWORD HIWORD LOBYTE HIBYTE GET_X_LPARAM GET_Y_LPARAM RGB MAX_PATH INVALID_HANDLE_VALUE S_OK S_FALSE E_FAIL E_INVALIDARG E_OUTOFMEMORY E_NOTIMPL E_NOINTERFACE E_POINTER E_ACCESSDENIED E_UNEXPECTED ERROR_SUCCESS CALLBACK WINAPI APIENTRY STDMETHODCALLTYPE IID_PPV_ARGS ARRAYSIZE UNREFERENCED_PARAMETER TEXT _T CP_ACP CP_UTF8 INFINITE",
+  "upperCaseMacros": false,
   "lineComments": ["//"],
   "blockComment": ["/*", "*/"],
   "strings": "\"",

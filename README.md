@@ -86,6 +86,10 @@ Lists such as `keywords` can be either an array of strings or a single string of
 | `tokenizer` | `code` (default) for languages described by the fields below. `markup`, `css`, `batch` and `ini` select the built-in XML/HTML, CSS, batch file and INI tokenizers, which only use `keywords` (batch) and `scriptLanguage` / `styleLanguage` (markup). |
 | `keywords` | Words coloured as keywords. |
 | `types` | Words coloured as types, such as built-in types and functions. |
+| `typeDeclarations` | Words that declare a type, such as `class` and `struct`. The name after one (skipping keywords, as in `enum class Color`) is coloured as a type everywhere it's used in the file. Types declared in other files aren't recognised. |
+| `macros` | Well-known macros, coloured as macros, such as `NULL`, `assert` and `__FILE__`. |
+| `upperCaseMacros` | `true` to colour every ALL_CAPS word (such as `MAX_PATH`) as a macro, for macros defined in headers. This also catches all-caps constants. Off for every built-in language. |
+| `bangMacros` | `true` for Rust-style `name!` macros. |
 | `ignoreCase` | `true` to match keywords and types regardless of case. |
 | `lineComments` | Markers that start a comment running to the end of the line, e.g. `["//"]`. |
 | `blockComment` | Start and end markers of block comments, e.g. `["/*", "*/"]`. |
@@ -93,7 +97,7 @@ Lists such as `keywords` can be either an array of strings or a single string of
 | `multilineStrings` | Characters that delimit strings that can span lines, e.g. `` "`" `` for JavaScript template strings. |
 | `escape` | Escape character inside strings. Default `"\\"`; use `""` for none. |
 | `charLiterals` | `true` for C-style character literals such as `'a'` and `'\n'`. |
-| `preprocessor` | `true` to colour lines starting with `#` as preprocessor directives. |
+| `preprocessor` | `true` to colour lines starting with `#` as preprocessor directives. The name after `#define` or `#undef` is coloured as a macro everywhere it's used in the file, and code between `#if 0` and its `#else`, `#elif` or `#endif` is shown as a comment. |
 | `rawStrings` | `true` for C++ raw strings `R"(...)"`. |
 | `verbatimStrings` | `true` for C# verbatim strings `@"..."`. |
 | `tripleQuotedStrings` | `true` for Python `"""..."""` and `'''...'''` strings. |
@@ -127,4 +131,4 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 }
 ```
 
-Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable` and `property`; any left out use the `text` colour. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
+Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property` and `macro`; any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.

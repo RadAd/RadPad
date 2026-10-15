@@ -35,6 +35,10 @@ namespace syntax
             Tokenizer Kind = Tokenizer::Code;
             WordSet Keywords;                     // lower case when IgnoreCase
             WordSet Types;
+            WordSet TypeDeclarations;             // words that declare a type named by the next word, such as class
+            WordSet Macros;                       // well-known macros, coloured as macros
+            bool UpperCaseMacros = false;         // ALL_CAPS words are macros
+            bool BangMacros = false;              // Rust name! macros
             std::vector<std::wstring> LineComments;
             std::wstring BlockStart;
             std::wstring BlockEnd;
@@ -94,6 +98,21 @@ namespace syntax
         bool IsDigit(wchar_t c) { return c >= L'0' && c <= L'9'; }
         bool IsIdentStart(wchar_t c) { return std::iswalpha(c) || c == L'_'; }
         bool IsIdentChar(wchar_t c) { return std::iswalnum(c) || c == L'_'; }
+
+        // MAX_PATH, S_OK, D3D11: at least two characters, with capital letters and no small ones.
+        bool IsMacroCase(std::wstring_view word)
+        {
+            bool upper = false;
+            for (wchar_t c : word)
+            {
+                if (std::iswlower(c))
+                {
+                    return false;
+                }
+                upper = upper || std::iswupper(c);
+            }
+            return upper && word.size() >= 2;
+        }
 
         // Returns the index of lowerNeedle in text at or after from, ignoring case, or text.size().
         size_t FindIgnoreCase(std::wstring_view text, std::wstring_view lowerNeedle, size_t from)
@@ -178,6 +197,52 @@ namespace syntax
         // C-like and scripting languages, driven by the definition's rules
         // -----------------------------------------------------------------------------------------
 
+        // Colours the lines after an #if 0 line (ending at lineEnd) as a comment, up to the line with the
+        // matching #else, #elif or #endif, allowing for nested #if blocks. Returns the line break before
+        // that line, so the scanner sees it as the start of a line and colours the directive normally.
+        size_t SkipInactiveBlock(Scanner const& s, size_t lineEnd)
+        {
+            int depth = 0;
+            for (size_t line = lineEnd + 1; line < s.Size(); line = s.LineEnd(line) + 1)
+            {
+                size_t k = line;
+                while (IsBlank(s.At(k)))
+                {
+                    ++k;
+                }
+                if (s.At(k) != L'#')
+                {
+                    continue;
+                }
+                ++k;
+                while (IsBlank(s.At(k)))
+                {
+                    ++k;
+                }
+                size_t wordEnd = k;
+                while (IsIdentChar(s.At(wordEnd)))
+                {
+                    ++wordEnd;
+                }
+                auto word = s.Text.substr(k, wordEnd - k);
+                if (word.starts_with(L"if"))
+                {
+                    ++depth; // #if, #ifdef, #ifndef
+                }
+                else if (word == L"endif" && depth > 0)
+                {
+                    --depth;
+                }
+                else if (depth == 0 && (word == L"endif" || word == L"else" || word.starts_with(L"elif")))
+                {
+                    s.Fill(lineEnd + 1, line - 1, TokenKind::Comment);
+                    return line - 1;
+                }
+            }
+            s.Fill(lineEnd + 1, s.Size(), TokenKind::Comment); // no #endif: to the end of the file
+            return s.Size();
+        }
+
         // A #directive line: colours the directive and an #include <file> name; returns where scanning resumes.
         size_t ScanDirective(Scanner const& s, size_t i)
         {
@@ -206,6 +271,44 @@ namespace syntax
                     size_t end = std::min(close == npos ? s.Size() : close + 1, s.LineEnd(j));
                     s.Fill(j, end, TokenKind::String);
                     j = end;
+                }
+            }
+            else if (word == L"define" || word == L"undef")
+            {
+                // The macro's name. MarkDeclaredNames colours its uses.
+                while (IsBlank(s.At(j)))
+                {
+                    ++j;
+                }
+                size_t nameStart = j;
+                while (IsIdentChar(s.At(j)))
+                {
+                    ++j;
+                }
+                s.Fill(nameStart, j, TokenKind::Macro);
+            }
+            else if (word == L"if")
+            {
+                // #if 0 switches code off: show it as a comment, up to the matching #else, #elif or #endif.
+                size_t k = j;
+                while (IsBlank(s.At(k)))
+                {
+                    ++k;
+                }
+                if (s.At(k) == L'0' && !IsIdentChar(s.At(k + 1)))
+                {
+                    size_t afterZero = k + 1;
+                    while (IsBlank(s.At(afterZero)))
+                    {
+                        ++afterZero;
+                    }
+                    bool restIsComment = afterZero >= s.LineEnd(k) || s.StartsWith(afterZero, L"//") || s.StartsWith(afterZero, L"/*");
+                    if (restIsComment)
+                    {
+                        s.Fill(k, k + 1, TokenKind::Number);
+                        s.Fill(afterZero, s.LineEnd(k), TokenKind::Comment);
+                        return SkipInactiveBlock(s, s.LineEnd(k));
+                    }
                 }
             }
             return j;
@@ -241,6 +344,105 @@ namespace syntax
         bool StartsLineComment(LanguageDefinition const& lang, Scanner const& s, size_t i)
         {
             return std::any_of(lang.LineComments.begin(), lang.LineComments.end(), [&](auto const& marker) { return s.StartsWith(i, marker); });
+        }
+
+        // Colours the names of types and macros declared in the text, wherever they're used.
+        // A type's name is the first plain word after one of the language's type declaration words
+        // (class Foo, struct Foo), skipping keywords in between (enum class Foo). A macro's name is the
+        // word after #define, which ScanDirective has already coloured. Only this text is seen, so names
+        // declared in other files aren't recognised.
+        void MarkDeclaredNames(LanguageDefinition const& lang, Scanner const& s)
+        {
+            if (lang.TypeDeclarations.empty() && !lang.HashDirectives)
+            {
+                return;
+            }
+            auto const text = s.Text;
+            size_t const n = text.size();
+            auto wordEnd = [&](size_t i)
+            {
+                while (i < n && IsIdentChar(text[i]))
+                {
+                    ++i;
+                }
+                return i;
+            };
+            auto key = [&](std::wstring_view word) { return lang.IgnoreCase ? Lower(word) : std::wstring{ word }; };
+
+            // Find the declared names. Whitespace and comments may separate a type declaration word from the
+            // name; anything else (punctuation, strings) ends the search.
+            WordSet types;
+            WordSet macros;
+            bool expectName = false;
+            for (size_t i = 0; i < n;)
+            {
+                auto kind = s.Kinds[i];
+                if (kind == TokenKind::Comment || std::iswspace(text[i]))
+                {
+                    ++i;
+                    continue;
+                }
+                bool wordStart = IsIdentStart(text[i]) && (i == 0 || !IsIdentChar(text[i - 1]));
+                if (wordStart && kind == TokenKind::Macro && lang.HashDirectives)
+                {
+                    size_t j = wordEnd(i);
+                    macros.insert(key(text.substr(i, j - i)));
+                    expectName = false;
+                    i = j;
+                    continue;
+                }
+                if (!wordStart || (kind != TokenKind::Plain && kind != TokenKind::Keyword && kind != TokenKind::Type))
+                {
+                    expectName = false;
+                    ++i;
+                    continue;
+                }
+                size_t j = wordEnd(i);
+                auto word = key(text.substr(i, j - i));
+                if (lang.TypeDeclarations.contains(word))
+                {
+                    expectName = true;
+                }
+                else if (expectName && kind == TokenKind::Plain)
+                {
+                    // Not a qualified name such as typename std::vector<T>::iterator, whose first part is a namespace.
+                    if (!s.StartsWith(j, L"::"))
+                    {
+                        types.insert(std::move(word));
+                    }
+                    expectName = false;
+                }
+                else if (kind != TokenKind::Keyword)
+                {
+                    expectName = false;
+                }
+                i = j;
+            }
+            if (types.empty() && macros.empty())
+            {
+                return;
+            }
+
+            // Colour every plain use of them.
+            for (size_t i = 0; i < n;)
+            {
+                if (s.Kinds[i] == TokenKind::Plain && IsIdentStart(text[i]) && (i == 0 || !IsIdentChar(text[i - 1])))
+                {
+                    size_t j = wordEnd(i);
+                    auto word = key(text.substr(i, j - i));
+                    if (macros.contains(word))
+                    {
+                        s.Fill(i, j, TokenKind::Macro);
+                    }
+                    else if (types.contains(word))
+                    {
+                        s.Fill(i, j, TokenKind::Type);
+                    }
+                    i = j;
+                    continue;
+                }
+                ++i;
+            }
         }
 
         void ClassifyCode(LanguageDefinition const& lang, Scanner const& s)
@@ -446,6 +648,19 @@ namespace syntax
                         {
                             kind = TokenKind::Type;
                         }
+                        else if (lang.Macros.contains(word))
+                        {
+                            kind = TokenKind::Macro;
+                        }
+                        else if (lang.BangMacros && s.At(j) == L'!' && s.At(j + 1) != L'=')
+                        {
+                            kind = TokenKind::Macro;
+                            ++j; // println!
+                        }
+                        else if (lang.UpperCaseMacros && IsMacroCase(text.substr(i, j - i)))
+                        {
+                            kind = TokenKind::Macro;
+                        }
                     }
                     s.Fill(i, j, kind);
                     i = j;
@@ -453,6 +668,8 @@ namespace syntax
                 }
                 ++i;
             }
+
+            MarkDeclaredNames(lang, s);
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1046,6 +1263,16 @@ namespace syntax
             {
                 lang.Types.insert(lang.IgnoreCase ? Lower(word) : word);
             }
+            for (auto const& word : ReadList(json, L"typeDeclarations"))
+            {
+                lang.TypeDeclarations.insert(lang.IgnoreCase ? Lower(word) : word);
+            }
+            for (auto const& word : ReadList(json, L"macros"))
+            {
+                lang.Macros.insert(lang.IgnoreCase ? Lower(word) : word);
+            }
+            lang.UpperCaseMacros = ReadBool(json, L"upperCaseMacros");
+            lang.BangMacros = ReadBool(json, L"bangMacros");
 
             lang.LineComments = ReadList(json, L"lineComments");
             auto block = ReadList(json, L"blockComment");

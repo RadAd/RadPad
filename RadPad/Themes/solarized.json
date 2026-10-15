@@ -12,7 +12,8 @@
     "tag": "#268BD2",
     "attribute": "#B58900",
     "variable": "#268BD2",
-    "property": "#268BD2"
+    "property": "#268BD2",
+    "macro": "#6C71C4"
   },
   "dark": {
     "background": "#002B36",
@@ -26,6 +27,7 @@
     "tag": "#268BD2",
     "attribute": "#B58900",
     "variable": "#268BD2",
-    "property": "#268BD2"
+    "property": "#268BD2",
+    "macro": "#6C71C4"
   }
 }

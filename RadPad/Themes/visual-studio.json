@@ -11,7 +11,8 @@
     "tag": "#800000",
     "attribute": "#E50000",
     "variable": "#001080",
-    "property": "#0451A5"
+    "property": "#0451A5",
+    "macro": "#6F008A"
   },
   "dark": {
     "text": "#FFFFFF",
@@ -24,6 +25,7 @@
     "tag": "#569CD6",
     "attribute": "#9CDCFE",
     "variable": "#9CDCFE",
-    "property": "#9CDCFE"
+    "property": "#9CDCFE",
+    "macro": "#BEB7FF"
   }
 }

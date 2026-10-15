@@ -22,6 +22,7 @@ namespace syntax
         Attribute,
         Variable,
         Property,
+        Macro,
         Unknown, // never produced by Classify; marks text whose colour hasn't been applied yet
     };
 
