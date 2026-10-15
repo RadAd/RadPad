@@ -43,6 +43,11 @@ namespace winrt::RadPad::implementation
         bool StartNewUndoRecord{ true };
         std::wstring Header;
         bool IsDirty{ false };
+        // The file on disk as last loaded or saved (write time and size), to notice other programs changing it.
+        std::optional<std::pair<uint64_t, uint64_t>> DiskStamp;
+        std::optional<std::optional<std::pair<uint64_t, uint64_t>>> PendingDiskStamp; // a change seen, not yet acted on
+        bool DeletedOnDisk{ false };                 // the file was deleted while open; saving recreates it
+        bool AskingToReload{ false };
         bool IsClosing{ false };
         bool RefreshPending{ false };
         bool RepaintPending{ false };
@@ -166,6 +171,10 @@ namespace winrt::RadPad::implementation
 
         // External tools
         void ReloadTools();
+        void CheckFilesOnDisk();
+        void CheckDocumentFile(std::shared_ptr<Document> const& doc);
+        bool ReloadDocument(std::shared_ptr<Document> const& doc);
+        fire_and_forget AskToReloadAsync(std::shared_ptr<Document> doc, std::optional<std::pair<uint64_t, uint64_t>> stamp);
         void BuildToolsMenu();
         void RunTool(tools::Tool const& tool);
         void EditTools();
@@ -259,6 +268,7 @@ namespace winrt::RadPad::implementation
         bool m_overlayUpdatePending{ false };
         std::vector<std::wstring> m_recentFiles;  // most recent first
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
+        Microsoft::UI::Dispatching::DispatcherQueueTimer m_fileWatchTimer{ nullptr }; // checks open files for changes made by other programs
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
         std::vector<std::wstring> m_themeErrors;    // from loading the colour themes
         std::vector<tools::Tool> m_tools;           // the Tools menu

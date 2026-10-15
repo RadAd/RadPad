@@ -22,6 +22,7 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 - Right-click a tab to copy its file name or full path, open its folder in Explorer with the file selected, or close it, the other tabs, or the tabs to its right
 - **Tools** menu: your own external programs, run on the current file (see below)
 - Open (multi-select), Save, Save As (with an Encoding picker), Save All (Ctrl+Alt+S); prompts to save when closing a tab or the window
+- Files changed by another program while open are reloaded automatically, and the reload can be undone. If the tab has unsaved changes, RadPad asks first. A file deleted while open stays in its tab, marked unsaved, so saving puts it back.
 - The Open and Save As file type lists include every loaded language, using the extensions in its definition. Save As starts on the document's language, and a new document is suggested that language's first extension.
 - Detects UTF-8, UTF-8 BOM, UTF-16 LE/BE and ANSI encodings, plus CRLF/LF/CR line endings; you can change either from the status bar
 - Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5)
@@ -136,7 +137,7 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property` and `macro`; any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
 
 ## External tools
-The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away, and mistakes are reported in a message.
+The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away,, and mistakes are reported in a message.
 
 ```json
 {

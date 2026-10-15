@@ -452,6 +452,18 @@ namespace
         return directory.empty() ? std::wstring{} : directory + L"\\tools.json";
     }
 
+    // A file's last write time and size, to tell when it changes; nothing if it doesn't exist.
+    std::optional<std::pair<uint64_t, uint64_t>> FileStamp(std::wstring const& path)
+    {
+        WIN32_FILE_ATTRIBUTE_DATA data{};
+        if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data))
+        {
+            return std::nullopt;
+        }
+        return std::pair{ (static_cast<uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32) | data.ftLastWriteTime.dwLowDateTime,
+                          (static_cast<uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow };
+    }
+
     // %LOCALAPPDATA%\RadPad\Themes: colour themes added or customised by the user.
     std::wstring UserThemeFolder()
     {
@@ -753,6 +765,12 @@ namespace winrt::RadPad::implementation
         // Pick up files removed from the taskbar jump list. Closing the jump list can reactivate the window
         // before Windows has saved the removal, so activation checks again a moment later, and the menu
         // also checks just before it opens.
+        // Pick up changes made by other programs to open files.
+        m_fileWatchTimer = DispatcherQueue().CreateTimer();
+        m_fileWatchTimer.Interval(std::chrono::seconds(1));
+        m_fileWatchTimer.Tick([this](auto&&, auto&&) { CheckFilesOnDisk(); });
+        m_fileWatchTimer.Start();
+
         m_jumpListSyncTimer = DispatcherQueue().CreateTimer();
         m_jumpListSyncTimer.Interval(std::chrono::milliseconds(1500));
         m_jumpListSyncTimer.IsRepeating(false);
@@ -1126,6 +1144,9 @@ namespace winrt::RadPad::implementation
         doc->Language = syntax::LanguageFromPath(fullPath);
         doc->Editor.Document().SetText(TextSetOptions::None, loaded.Text);
         doc->SavedText = EditorText(doc->Editor);
+        doc->DiskStamp = FileStamp(fullPath);
+        doc->PendingDiskStamp.reset();
+        doc->DeletedOnDisk = false;
         Select(doc->Editor, 0, 0);
         UpdateHighlighting(doc, true);
         ClearUndoHistory(doc);
@@ -1382,6 +1403,12 @@ namespace winrt::RadPad::implementation
         doc->Encoding = doc->SavedEncoding = encoding;
         doc->SavedEol = doc->Eol;
         doc->SavedText = std::move(text);
+        doc->DiskStamp = FileStamp(path); // our own save isn't a change by another program
+        doc->PendingDiskStamp.reset();
+        if (std::exchange(doc->DeletedOnDisk, false))
+        {
+            StatusMessageText().Text(L""); // no longer true that it was deleted
+        }
         UpdateDocumentState(doc);
 
         // Saving under a new name switches to its extension's language, unless that would turn highlighting off.
@@ -1404,13 +1431,171 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::ReloadTools()
     {
+        auto path = ToolsFilePath();
         m_toolErrors.clear();
-        m_tools = tools::LoadTools(ToolsFilePath(), m_toolErrors);
+        m_tools = tools::LoadTools(path, m_toolErrors);
         BuildToolsMenu();
         if (m_loaded && !m_toolErrors.empty())
         {
             ShowLoadErrors();
         }
+    }
+
+    void MainWindow::CheckFilesOnDisk()
+    {
+        auto documents = m_documents; // reloading can't change the list, but a dialog's continuation might
+        for (auto const& doc : documents)
+        {
+            CheckDocumentFile(doc);
+        }
+    }
+
+    void MainWindow::CheckDocumentFile(std::shared_ptr<Document> const& doc)
+    {
+        // Runs every second for each open file. As for the tools file, acts once a change has stayed the
+        // same for a tick, so a program part-way through writing the file isn't caught.
+        if (doc->Path.empty() || doc->AskingToReload || doc->IsClosing)
+        {
+            return;
+        }
+        auto stamp = FileStamp(doc->Path);
+        if (stamp == doc->DiskStamp)
+        {
+            doc->PendingDiskStamp.reset();
+            return;
+        }
+        if (!doc->PendingDiskStamp || stamp != *doc->PendingDiskStamp)
+        {
+            doc->PendingDiskStamp = stamp;
+            return;
+        }
+
+        if (!stamp)
+        {
+            // Deleted (or renamed or moved). Keep the text, marked unsaved so saving puts the file back.
+            doc->PendingDiskStamp.reset();
+            doc->DiskStamp.reset();
+            doc->DeletedOnDisk = true;
+            UpdateDocumentState(doc);
+            StatusMessageText().Text(std::format(L"{} was deleted by another program; save to keep it", doc->DisplayName()));
+            return;
+        }
+        if (doc->IsDirty && !doc->DeletedOnDisk)
+        {
+            // Unsaved changes would be lost, so ask. One question at a time: try again next tick if a
+            // dialog is already open.
+            if (!m_dialogOpen)
+            {
+                AskToReloadAsync(doc, stamp);
+            }
+            return;
+        }
+        ReloadDocument(doc);
+    }
+
+    fire_and_forget MainWindow::AskToReloadAsync(std::shared_ptr<Document> doc, std::optional<std::pair<uint64_t, uint64_t>> stamp)
+    {
+        auto strong = get_strong();
+        doc->AskingToReload = true;
+        Tabs().SelectedItem(doc->Tab);
+
+        ContentDialog dialog;
+        dialog.Title(box_value(hstring{ AppName }));
+        dialog.Content(box_value(hstring{ std::format(L"\"{}\" has been changed by another program.\n\nReload it? Your unsaved changes will be replaced, though Undo can bring them back.", doc->Path) }));
+        dialog.PrimaryButtonText(L"Reload");
+        dialog.CloseButtonText(L"Keep my version");
+        dialog.DefaultButton(ContentDialogButton::Close);
+        auto result = co_await ShowDialogAsync(dialog);
+
+        doc->AskingToReload = false;
+        doc->PendingDiskStamp.reset();
+        if (result == ContentDialogResult::Primary)
+        {
+            ReloadDocument(doc);
+        }
+        else
+        {
+            doc->DiskStamp = stamp; // don't ask again until the file changes again
+        }
+    }
+
+    bool MainWindow::ReloadDocument(std::shared_ptr<Document> const& doc)
+    {
+        // Replaces the text with the file's, as one undoable edit, keeping the caret and scroll position.
+        auto stamp = FileStamp(doc->Path);
+        doc->PendingDiskStamp.reset();
+        doc->DiskStamp = stamp; // also when reading fails, so a file that can't be read isn't retried every second
+        textfile::LoadedText loaded;
+        try
+        {
+            loaded = textfile::Load(doc->Path);
+        }
+        catch (hresult_error const& e)
+        {
+            StatusMessageText().Text(std::format(L"Couldn't reload {}: {}", doc->DisplayName(), std::wstring_view{ e.message() }));
+            return false;
+        }
+
+        auto editor = doc->Editor;
+        auto oldText = EditorText(editor);
+        auto newText = textfile::NormalizeLineBreaks(loaded.Text);
+        if (oldText != newText)
+        {
+            // Only the part that changed is replaced, so the caret, highlighting and undo record stay small.
+            size_t prefix = 0;
+            while (prefix < oldText.size() && prefix < newText.size() && oldText[prefix] == newText[prefix])
+            {
+                ++prefix;
+            }
+            size_t suffix = 0;
+            while (suffix < oldText.size() - prefix && suffix < newText.size() - prefix
+                && oldText[oldText.size() - 1 - suffix] == newText[newText.size() - 1 - suffix])
+            {
+                ++suffix;
+            }
+            size_t oldEnd = oldText.size() - suffix;
+            int delta = static_cast<int>(newText.size()) - static_cast<int>(oldText.size());
+
+            // The caret moves with the text after the change; inside the change it goes to its start.
+            int caret = SelectionStart(editor);
+            if (caret >= static_cast<int>(oldEnd))
+            {
+                caret += delta;
+            }
+            else if (caret > static_cast<int>(prefix))
+            {
+                caret = static_cast<int>(prefix);
+            }
+
+            double horizontal = doc->ScrollViewer ? doc->ScrollViewer.HorizontalOffset() : 0;
+            double vertical = doc->ScrollViewer ? doc->ScrollViewer.VerticalOffset() : 0;
+            doc->StartNewUndoRecord = true;
+            Select(editor, static_cast<int>(prefix), static_cast<int>(oldEnd - prefix));
+            InsertText(editor, std::wstring_view{ newText }.substr(prefix, newText.size() - suffix - prefix));
+            doc->StartNewUndoRecord = true;
+            Select(editor, std::clamp(caret, 0, static_cast<int>(newText.size())), 0);
+
+            // Selecting scrolls the caret into view; put the view back where it was once that's done.
+            if (auto viewer = doc->ScrollViewer)
+            {
+                DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [viewer, horizontal, vertical]
+                {
+                    viewer.ChangeView(horizontal, vertical, nullptr, true);
+                });
+            }
+        }
+
+        doc->SavedText = newText;
+        doc->Encoding = doc->SavedEncoding = loaded.Encoding;
+        doc->Eol = doc->SavedEol = loaded.Eol;
+        doc->DeletedOnDisk = false;
+        UpdateDocumentState(doc);
+        if (doc == CurrentDocument())
+        {
+            UpdateStatusBar();
+            StatusMessageText().Text(std::format(L"Reloaded {}: it was changed by another program", doc->DisplayName()));
+        }
+        return true;
     }
 
     void MainWindow::BuildToolsMenu()
@@ -2035,7 +2220,7 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::UpdateDocumentState(std::shared_ptr<Document> const& doc)
     {
-        doc->IsDirty = EditorText(doc->Editor) != doc->SavedText || doc->Encoding != doc->SavedEncoding || doc->Eol != doc->SavedEol;
+        doc->IsDirty = doc->DeletedOnDisk || EditorText(doc->Editor) != doc->SavedText || doc->Encoding != doc->SavedEncoding || doc->Eol != doc->SavedEol;
 
         auto name = doc->DisplayName();
         auto header = doc->IsDirty ? name + L" •" : name;
