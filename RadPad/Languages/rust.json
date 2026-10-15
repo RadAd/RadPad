@@ -1,9 +1,22 @@
 {
   "name": "Rust",
   "extensions": ["rs"],
-  "keywords": "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type union unsafe use where while macro_rules",
-  "types": "bool char f32 f64 i8 i16 i32 i64 i128 isize str u8 u16 u32 u64 u128 usize Box Err None Ok Option Result Some String Vec HashMap HashSet BTreeMap BTreeSet VecDeque BinaryHeap LinkedList Rc Arc Weak RefCell Cell Mutex RwLock Cow PathBuf Path File Duration Instant SystemTime Iterator IntoIterator Fn FnMut FnOnce Clone Copy Debug Display Default Drop Eq PartialEq Ord PartialOrd Hash Send Sync Sized From Into AsRef AsMut Deref Error",
-  "typeDeclarations": "struct enum union trait type",
+  "keywords": [
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern",
+    "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+    "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "union",
+    "unsafe", "use", "where", "while", "macro_rules"
+  ],
+  "types": [
+    "bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "i128", "isize", "str", "u8", "u16",
+    "u32", "u64", "u128", "usize", "Box", "Err", "None", "Ok", "Option", "Result", "Some", "String",
+    "Vec", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "BinaryHeap", "LinkedList",
+    "Rc", "Arc", "Weak", "RefCell", "Cell", "Mutex", "RwLock", "Cow", "PathBuf", "Path", "File",
+    "Duration", "Instant", "SystemTime", "Iterator", "IntoIterator", "Fn", "FnMut", "FnOnce",
+    "Clone", "Copy", "Debug", "Display", "Default", "Drop", "Eq", "PartialEq", "Ord", "PartialOrd",
+    "Hash", "Send", "Sync", "Sized", "From", "Into", "AsRef", "AsMut", "Deref", "Error"
+  ],
+  "typeDeclarations": ["struct", "enum", "union", "trait", "type"],
   "bangMacros": true,
   "lineComments": ["//"],
   "blockComment": ["/*", "*/"],

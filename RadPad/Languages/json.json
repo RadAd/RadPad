@@ -1,7 +1,7 @@
 {
   "name": "JSON",
   "extensions": ["json", "jsonc", "webmanifest"],
-  "keywords": "true false null",
+  "keywords": ["true", "false", "null"],
   "lineComments": ["//"],
   "blockComment": ["/*", "*/"],
   "strings": "\"",
