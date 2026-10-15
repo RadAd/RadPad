@@ -1208,6 +1208,24 @@ namespace winrt::RadPad::implementation
                 e.Handled(true);
             }
         } }), true);
+        // Double-clicking selects a word and the spaces after it; drop the spaces, so the word alone is
+        // selected. A double-click on spaces still selects them.
+        editor.AddHandler(UIElement::DoubleTappedEvent(), box_value(DoubleTappedEventHandler{ [](IInspectable const& sender, DoubleTappedRoutedEventArgs const&)
+        {
+            auto selection = sender.as<RichEditBox>().Document().Selection();
+            if (selection.Length() == 0)
+            {
+                return;
+            }
+            hstring text;
+            selection.GetText(TextGetOptions::None, text);
+            std::wstring_view view{ text };
+            size_t end = view.find_last_not_of(L" \t ");
+            if (end != std::wstring_view::npos && end + 1 < view.size() && view.find(L'\r') == std::wstring_view::npos)
+            {
+                selection.SetRange(selection.StartPosition(), selection.StartPosition() + static_cast<int>(end + 1));
+            }
+        } }), true);
 
         TabViewItem tab;
         FontIconSource icon;
