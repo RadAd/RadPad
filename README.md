@@ -30,10 +30,12 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 ` matches a line break. In the replacement, `$1` (or `$&` for the whole match) inserts what was matched and `
 ` and `	` insert a line break or tab.
 - Home goes to the first non-whitespace character of the line; pressing it again goes to the very start. Shift+Home selects the same way. On a wrapped row, Home first goes to the start of that row.
+- **Ctrl+]** goes to the matching bracket (also **Edit > Go to matching bracket**): from next to a bracket to its partner, or from inside brackets to the closing one. **Ctrl+Shift+]** selects from one bracket to the other. Brackets in strings and comments are skipped.
 - Tabs and indentation, under **Format > Tabs** or the status bar button: the Tab key inserts either a tab or spaces up to the next multiple of the indent size (1–8). Tab characters display at a chosen width (1–8 spaces, default 8). With more than one line selected, Tab indents the selected lines; Shift+Tab outdents them, or the current line if nothing is selected.
 - Word wrap, font picker (all system fonts), zoom (Ctrl+Plus/Minus/0, Ctrl+mouse wheel), status bar toggle
 - **View > Show whitespace** marks spaces with `·` and tabs with `→`. Markers are drawn over the editor rather than inserted into the text. It's only available with a monospaced font and word wrap off, because markers are placed by line and column.
 - **View > Highlight trailing whitespace** (on by default) shades spaces and tabs at the ends of lines, including lines that are only whitespace. Whitespace ending at the cursor isn't shaded, so it doesn't flash while you type.
+- **View > Rainbow brackets** (on by default) colours `()`, `[]` and `{}` in code by how deeply they're nested, cycling through three colours.
 - With word wrap on, a `↵` marker in the right margin shows each row that continues on the next row, so wrapped lines can be told apart from separate lines.
 - Syntax highlighting for Batch, C, C++, C#, CSS, Go, HTML (including `<script>` and `<style>`), INI, Java, JavaScript, JSON, PowerShell, Python, Resource Script (`.rc`), Rust, SQL, TypeScript and XML. The language is picked from the file extension and can be changed from **Format > Language** or the status bar. Colours come from the colour theme chosen under **View > Color theme**: Visual Studio (the default), GitHub, Solarized, Monokai or One Dark, or your own (see below). Files over 1,000,000 characters are shown as plain text. Languages are defined in JSON files that users can add to (see below).
 - Open files from the command line or by dragging them onto the window. Files given on the command line (including from the taskbar jump list) open as tabs in the RadPad window already open on the current virtual desktop, if there is one, otherwise in a new window. Starting RadPad without files always opens a new window.
@@ -137,7 +139,7 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 }
 ```
 
-Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property` and `macro`; any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
+Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property`, `macro` and `bracket1` to `bracket3` (the rainbow bracket colours); any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour, and the bracket colours, which use VS Code's. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
 
 ## External tools
 The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away,, and mistakes are reported in a message.

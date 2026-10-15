@@ -12,7 +12,10 @@
     "attribute": "#E50000",
     "variable": "#001080",
     "property": "#0451A5",
-    "macro": "#6F008A"
+    "macro": "#6F008A",
+    "bracket1": "#0431FA",
+    "bracket2": "#319331",
+    "bracket3": "#7B3814"
   },
   "dark": {
     "text": "#FFFFFF",
@@ -26,6 +29,9 @@
     "attribute": "#9CDCFE",
     "variable": "#9CDCFE",
     "property": "#9CDCFE",
-    "macro": "#BEB7FF"
+    "macro": "#BEB7FF",
+    "bracket1": "#FFD700",
+    "bracket2": "#DA70D6",
+    "bracket3": "#179FFF"
   }
 }

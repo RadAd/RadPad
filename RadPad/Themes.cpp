@@ -20,7 +20,7 @@ namespace themes
         };
 
         // JSON keys for the colours, in TokenKind order.
-        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property", L"macro" };
+        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property", L"macro", L"bracket1", L"bracket2", L"bracket3" };
         static_assert(std::size(ColorKeys) == ColorCount);
 
         Color Rgb(uint32_t rgb)
@@ -44,8 +44,8 @@ namespace themes
         {
             return {
                 DefaultThemeName,
-                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5, 0x6F008A }),
-                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE, 0xBEB7FF }),
+                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5, 0x6F008A, 0x0431FA, 0x319331, 0x7B3814 }),
+                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE, 0xBEB7FF, 0xFFD700, 0xDA70D6, 0x179FFF }),
             };
         }
 
@@ -94,6 +94,17 @@ namespace themes
             if (!json.HasKey(ColorKeys[macro]))
             {
                 palette.Colors[macro] = palette.Colors[static_cast<size_t>(syntax::TokenKind::Preprocessor)];
+            }
+            // Rainbow brackets default to VS Code's colours, rather than all being the text colour.
+            uint32_t const darkBrackets[] = { 0xFFD700, 0xDA70D6, 0x179FFF };
+            uint32_t const lightBrackets[] = { 0x0431FA, 0x319331, 0x7B3814 };
+            for (size_t k = 0; k < 3; ++k)
+            {
+                auto index = static_cast<size_t>(syntax::TokenKind::Bracket1) + k;
+                if (!json.HasKey(ColorKeys[index]))
+                {
+                    palette.Colors[index] = Rgb(dark ? darkBrackets[k] : lightBrackets[k]);
+                }
             }
             if (json.HasKey(L"background"))
             {

@@ -23,6 +23,9 @@ namespace syntax
         Variable,
         Property,
         Macro,
+        Bracket1, // rainbow brackets: the nesting depth, cycling through three colours
+        Bracket2,
+        Bracket3,
         Unknown, // never produced by Classify; marks text whose colour hasn't been applied yet
     };
 
@@ -45,4 +48,7 @@ namespace syntax
 
     // Resizes kinds to text.size() and sets the token kind of every character.
     void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds);
+
+    // Whether brackets in code are coloured by nesting depth (Bracket1 to Bracket3). On by default.
+    void SetRainbowBrackets(bool on);
 }

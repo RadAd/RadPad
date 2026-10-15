@@ -817,6 +817,39 @@ namespace syntax
         bool IsCssNameStart(wchar_t c) { return std::iswalpha(c) || c == L'_'; }
         bool IsCssNameChar(wchar_t c) { return std::iswalnum(c) || c == L'_' || c == L'-'; }
 
+        bool& RainbowBrackets()
+        {
+            static bool on = true;
+            return on;
+        }
+
+        // Colours (), [] and {} by how deeply they're nested, cycling through three colours, as VS Code
+        // does. Brackets in strings and comments aren't plain, so they're left alone, as is a closing
+        // bracket with nothing open.
+        void MarkBrackets(Scanner const& s)
+        {
+            constexpr TokenKind colours[] = { TokenKind::Bracket1, TokenKind::Bracket2, TokenKind::Bracket3 };
+            size_t depth = 0;
+            for (size_t i = 0; i < s.Size(); ++i)
+            {
+                if (s.Kinds[i] != TokenKind::Plain)
+                {
+                    continue;
+                }
+                wchar_t c = s.Text[i];
+                if (c == L'(' || c == L'[' || c == L'{')
+                {
+                    s.Kinds[i] = colours[depth % 3];
+                    ++depth;
+                }
+                else if ((c == L')' || c == L']' || c == L'}') && depth > 0)
+                {
+                    --depth;
+                    s.Kinds[i] = colours[depth % 3];
+                }
+            }
+        }
+
         void ClassifyCss(Scanner const& s)
         {
             auto const text = s.Text;
@@ -1117,6 +1150,10 @@ namespace syntax
             case Tokenizer::Ini:
                 ClassifyIni(s);
                 break;
+            }
+            if (RainbowBrackets() && (language.Kind == Tokenizer::Code || language.Kind == Tokenizer::Css))
+            {
+                MarkBrackets(s);
             }
         }
 
@@ -1435,6 +1472,11 @@ namespace syntax
             patterns.insert(patterns.end(), lang.FileNames.begin(), lang.FileNames.end());
         }
         return patterns;
+    }
+
+    void SetRainbowBrackets(bool on)
+    {
+        RainbowBrackets() = on;
     }
 
     void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds)

@@ -108,6 +108,8 @@ namespace winrt::RadPad::implementation
         void StatusBar_Click(Sender const&, ClickArgs const&);
         void ShowWhitespace_Click(Sender const&, ClickArgs const&);
         void TrailingWhitespace_Click(Sender const&, ClickArgs const&);
+        void RainbowBrackets_Click(Sender const&, ClickArgs const&);
+        void MatchingBracket_Click(Sender const&, ClickArgs const&);
         void About_Click(Sender const&, ClickArgs const&);
         void Crlf_Click(Sender const&, ClickArgs const&);
         void Lf_Click(Sender const&, ClickArgs const&);
@@ -200,6 +202,7 @@ namespace winrt::RadPad::implementation
         void UpdateFontMetrics();
         void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
         bool SmartHome(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, bool extend);
+        void JumpToMatchingBracket(std::shared_ptr<Document> const& doc, bool select);
         bool SelectionSpansLines(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
         void ChangeIndent(std::shared_ptr<Document> const& doc, bool outdent);
         void BuildIndentMenus();
@@ -268,6 +271,7 @@ namespace winrt::RadPad::implementation
         bool m_statusBarVisible{ true };
         bool m_showWhitespace{ false };
         bool m_highlightTrailingWhitespace{ true };
+        bool m_rainbowBrackets{ true };
         bool m_overlayUpdatePending{ false };
         std::vector<std::wstring> m_recentFiles;  // most recent first
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };

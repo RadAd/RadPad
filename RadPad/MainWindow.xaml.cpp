@@ -880,6 +880,7 @@ namespace winrt::RadPad::implementation
         BuildIndentMenus();
         ShowWhitespaceItem().IsChecked(m_showWhitespace);
         TrailingWhitespaceItem().IsChecked(m_highlightTrailingWhitespace);
+        RainbowBracketsItem().IsChecked(m_rainbowBrackets);
         UpdateWhitespaceAvailability();
 
         // A colour theme can have different colours for the app's light and dark modes.
@@ -1116,7 +1117,16 @@ namespace winrt::RadPad::implementation
 
             switch (key)
             {
-            case 'E': case 'J': case 'L': case 'R': case VK_OEM_4: case VK_OEM_6: case VK_OEM_COMMA: case VK_OEM_PERIOD:
+            case VK_OEM_6:
+                // Ctrl+] goes to the matching bracket (Ctrl+Shift+] selects to it), as in Visual Studio.
+                // RichEditBox would otherwise use it to make the font bigger.
+                if (d)
+                {
+                    JumpToMatchingBracket(d, shift);
+                }
+                e.Handled(true);
+                break;
+            case 'E': case 'J': case 'L': case 'R': case VK_OEM_4: case VK_OEM_COMMA: case VK_OEM_PERIOD:
                 // RichEditBox shortcuts for alignment, lists and font size don't apply to plain text.
                 e.Handled(true);
                 break;
@@ -2190,6 +2200,121 @@ namespace winrt::RadPad::implementation
     {
         m_statusBarVisible = StatusBarItem().IsChecked();
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
+    }
+
+    void MainWindow::RainbowBrackets_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        m_rainbowBrackets = RainbowBracketsItem().IsChecked();
+        syntax::SetRainbowBrackets(m_rainbowBrackets);
+        for (auto const& doc : m_documents)
+        {
+            UpdateHighlighting(doc, false);
+        }
+    }
+
+    void MainWindow::MatchingBracket_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (auto doc = CurrentDocument())
+        {
+            JumpToMatchingBracket(doc, false);
+            FocusEditor(doc);
+        }
+    }
+
+    void MainWindow::JumpToMatchingBracket(std::shared_ptr<Document> const& doc, bool select)
+    {
+        // With the caret next to a bracket (after it is checked first, then before), goes to just before
+        // the matching one, so pressing again goes back. Elsewhere, goes to the closing bracket of the pair
+        // the caret is inside. With select, selects from one bracket to the other instead. Brackets in
+        // strings and comments don't count, when the highlighter has told them apart.
+        auto editor = doc->Editor;
+        auto text = EditorText(editor);
+        auto n = text.size();
+        bool haveKinds = doc->HighlightedText == text && doc->DesiredKinds.size() == n;
+        auto isCode = [&](size_t i) { return !haveKinds || (doc->DesiredKinds[i] != TokenKind::Comment && doc->DesiredKinds[i] != TokenKind::String); };
+        auto opening = [](wchar_t c) { return c == L'(' || c == L'[' || c == L'{'; };
+        auto closing = [](wchar_t c) { return c == L')' || c == L']' || c == L'}'; };
+        auto partner = [](wchar_t c) { switch (c) { case L'(': return L')'; case L'[': return L']'; case L'{': return L'}'; case L')': return L'('; case L']': return L'['; default: return L'{'; } };
+
+        auto selection = editor.Document().Selection();
+        bool startActive = (selection.Options() & Microsoft::UI::Text::SelectionOptions::StartActive) == Microsoft::UI::Text::SelectionOptions::StartActive;
+        size_t caret = std::min(static_cast<size_t>(std::max(startActive ? selection.StartPosition() : selection.EndPosition(), 0)), n);
+
+        // The bracket to start from.
+        std::optional<size_t> from;
+        if (caret < n && (opening(text[caret]) || closing(text[caret])) && isCode(caret))
+        {
+            from = caret;
+        }
+        else if (caret > 0 && (opening(text[caret - 1]) || closing(text[caret - 1])) && isCode(caret - 1))
+        {
+            from = caret - 1;
+        }
+        else
+        {
+            // The opening bracket of the pair around the caret.
+            int depth = 0;
+            for (size_t i = caret; i-- > 0;)
+            {
+                if (!isCode(i))
+                {
+                    continue;
+                }
+                if (closing(text[i]))
+                {
+                    ++depth;
+                }
+                else if (opening(text[i]) && depth-- == 0)
+                {
+                    from = i;
+                    break;
+                }
+            }
+        }
+
+        // Its partner: the next or previous bracket of the same type at the same depth.
+        std::optional<size_t> to;
+        if (from)
+        {
+            wchar_t c = text[*from];
+            wchar_t other = partner(c);
+            int depth = 0;
+            if (opening(c))
+            {
+                for (size_t i = *from + 1; i < n && !to; ++i)
+                {
+                    if (!isCode(i)) continue;
+                    if (text[i] == c) ++depth;
+                    else if (text[i] == other && depth-- == 0) to = i;
+                }
+            }
+            else
+            {
+                for (size_t i = *from; i-- > 0 && !to;)
+                {
+                    if (!isCode(i)) continue;
+                    if (text[i] == c) ++depth;
+                    else if (text[i] == other && depth-- == 0) to = i;
+                }
+            }
+        }
+        if (!to)
+        {
+            StatusMessageText().Text(from ? L"No matching bracket" : L"No bracket here");
+            return;
+        }
+
+        StatusMessageText().Text(L"");
+        size_t first = std::min(*from, *to);
+        size_t last = std::max(*from, *to);
+        if (select)
+        {
+            SelectAndReveal(editor, doc->ScrollViewer, static_cast<int>(first), static_cast<int>(last - first + 1));
+        }
+        else
+        {
+            SelectAndReveal(editor, doc->ScrollViewer, static_cast<int>(*to), 0);
+        }
     }
 
     void MainWindow::TrailingWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
@@ -4142,6 +4267,8 @@ namespace winrt::RadPad::implementation
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
         m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
         m_highlightTrailingWhitespace = GetPrivateProfileIntW(L"View", L"HighlightTrailingWhitespace", 1, path.c_str()) != 0;
+        m_rainbowBrackets = GetPrivateProfileIntW(L"View", L"RainbowBrackets", 1, path.c_str()) != 0;
+        syntax::SetRainbowBrackets(m_rainbowBrackets);
 
         m_recentFiles.clear();
         std::wstring file(32768, L'\0'); // long enough for any path
@@ -4175,6 +4302,7 @@ namespace winrt::RadPad::implementation
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"HighlightTrailingWhitespace", m_highlightTrailingWhitespace ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"RainbowBrackets", m_rainbowBrackets ? L"1" : L"0", path.c_str());
 
         WritePrivateProfileStringW(L"RecentFiles", nullptr, nullptr, path.c_str()); // remove the old list
         for (size_t i = 0; i < m_recentFiles.size(); ++i)

@@ -167,6 +167,8 @@
                             <KeyboardAccelerator Modifiers="Control" Key="G" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
+                    <!-- Ctrl+] (and Ctrl+Shift+] to select) are handled in the editor's key handler. -->
+                    <MenuFlyoutItem Text="Go to matching bracket" Click="MatchingBracket_Click" KeyboardAcceleratorTextOverride="Ctrl+]" />
                     <MenuFlyoutSeparator />
                     <MenuFlyoutItem Text="Select all" Click="SelectAll_Click" KeyboardAcceleratorTextOverride="Ctrl+A" />
                     <MenuFlyoutItem Text="Time/Date" Click="TimeDate_Click">
@@ -196,6 +198,7 @@
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
                     <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
                     <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
+                    <ToggleMenuFlyoutItem x:Name="RainbowBracketsItem" Text="Rainbow brackets" Click="RainbowBrackets_Click" />
                     <MenuFlyoutSeparator />
                     <!-- Items are added in code, one per loaded theme. -->
                     <MenuFlyoutSubItem x:Name="ColorThemeMenu" Text="Color theme" />
