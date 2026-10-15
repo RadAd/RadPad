@@ -56,10 +56,13 @@ The version is set in `RadPad/Version.h`, and only there. It's used for the exe'
 ## Source layout
 | File | Purpose |
 |---|---|
-| `MainWindow.xaml` / `.h` / `.cpp` | UI, tabs, commands, find/replace, dialogs |
+| `MainWindow.xaml` / `.h` / `.cpp` | The main window's layout and class; `MainWindow.xaml.cpp` has start-up, keyboard handling, the title and status bar, editor settings, zoom, drag and drop and settings |
+| `MainWindow.<area>.cpp` | The rest of `MainWindow`, one file per area: `Documents`, `Tabs`, `RecentFiles`, `Commands`, `Editing` (indentation, brackets, paste, undo), `Find`, `Highlighting` (also languages and colour themes), `Overlay` (whitespace and wrap markers), `Tools`, `Output` (the output panel) and `Dialogs` |
+| `MainWindowHelpers.h` | Constants and helper functions shared by the `MainWindow*.cpp` files |
 | `TextFile.h` / `.cpp` | File loading and saving, encoding and line-ending handling |
 | `Instance.h` / `.cpp` | Sends command-line files to a window already open on the current virtual desktop |
 | `Syntax.h` / `.cpp` | Loads the language definitions, detects a file's language and tokenizes text for highlighting |
+| `SyntaxCode.cpp`, `SyntaxMarkup.cpp`, `SyntaxSimple.cpp`, `SyntaxMarkdown.cpp` | The tokenizers: code (driven by the definitions), XML/HTML and CSS, batch and INI, and Markdown. `SyntaxInternal.h` has what they share |
 | `Languages/*.json` | The built-in language definitions, copied to the output's `Languages` folder |
 | `Themes.h` / `.cpp` | Loads the colour themes and picks the colours for the app's light or dark mode |
 | `Themes/*.json` | The built-in colour themes, copied to the output's `Themes` folder |

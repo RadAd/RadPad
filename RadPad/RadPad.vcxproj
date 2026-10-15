@@ -114,6 +114,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Syntax.h" />
+    <ClInclude Include="SyntaxInternal.h" />
     <ClInclude Include="Themes.h" />
     <ClInclude Include="Tools.h" />
     <ClInclude Include="Version.h" />
@@ -124,6 +125,7 @@
     <ClInclude Include="MainWindow.xaml.h">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClInclude>
+    <ClInclude Include="MainWindowHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
@@ -135,6 +137,10 @@
     </ClCompile>
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
+    <ClCompile Include="SyntaxCode.cpp" />
+    <ClCompile Include="SyntaxMarkdown.cpp" />
+    <ClCompile Include="SyntaxMarkup.cpp" />
+    <ClCompile Include="SyntaxSimple.cpp" />
     <ClCompile Include="Themes.cpp" />
     <ClCompile Include="Tools.cpp" />
     <ClCompile Include="TextFile.cpp" />
@@ -144,6 +150,17 @@
     <ClCompile Include="MainWindow.xaml.cpp">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClCompile>
+    <ClCompile Include="MainWindow.Commands.cpp" />
+    <ClCompile Include="MainWindow.Dialogs.cpp" />
+    <ClCompile Include="MainWindow.Documents.cpp" />
+    <ClCompile Include="MainWindow.Editing.cpp" />
+    <ClCompile Include="MainWindow.Find.cpp" />
+    <ClCompile Include="MainWindow.Highlighting.cpp" />
+    <ClCompile Include="MainWindow.Output.cpp" />
+    <ClCompile Include="MainWindow.Overlay.cpp" />
+    <ClCompile Include="MainWindow.RecentFiles.cpp" />
+    <ClCompile Include="MainWindow.Tabs.cpp" />
+    <ClCompile Include="MainWindow.Tools.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
   <ItemGroup>
