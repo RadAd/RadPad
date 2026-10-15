@@ -221,21 +221,22 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="320" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="FindBox" PlaceholderText="Find" KeyDown="FindBox_KeyDown" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                        <Button Click="FindPrevious_Click" ToolTipService.ToolTip="Find previous (Shift+F3)">
+                        <Button Click="FindPrevious_Click" ToolTipService.ToolTip="Find previous (Shift+F3)" AutomationProperties.Name="Find previous">
                             <FontIcon Glyph="&#xE74A;" FontSize="14" />
                         </Button>
-                        <Button Click="FindNext_Click" ToolTipService.ToolTip="Find next (F3)">
+                        <Button Click="FindNext_Click" ToolTipService.ToolTip="Find next (F3)" AutomationProperties.Name="Find next">
                             <FontIcon Glyph="&#xE74B;" FontSize="14" />
                         </Button>
                         <CheckBox x:Name="MatchCaseCheck" Content="Match case" MinWidth="0" Margin="12,0,0,0" />
                         <CheckBox x:Name="WrapAroundCheck" Content="Wrap around" MinWidth="0" IsChecked="True" />
-                        <Button Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)">
-                            <FontIcon Glyph="&#xE711;" FontSize="14" />
-                        </Button>
                     </StackPanel>
+                    <Button Grid.Column="2" Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)" AutomationProperties.Name="Close find">
+                        <FontIcon Glyph="&#xE711;" FontSize="14" />
+                    </Button>
                 </Grid>
                 <Grid x:Name="ReplaceRow" ColumnSpacing="8" Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
