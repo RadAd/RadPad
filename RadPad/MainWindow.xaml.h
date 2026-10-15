@@ -4,6 +4,7 @@
 #include "Syntax.h"
 #include "Themes.h"
 #include "Tools.h"
+#include <regex>
 #include "TextFile.h"
 
 namespace winrt::RadPad::implementation
@@ -233,6 +234,7 @@ namespace winrt::RadPad::implementation
         void ShowFindPanel(bool showReplace);
         void HideFindPanel();
         bool FindNext(bool forward);
+        std::optional<std::wregex> FindPattern();
         void ReplaceOne();
         void ReplaceAll();
         bool IsFocusWithin(Microsoft::UI::Xaml::UIElement const& element);

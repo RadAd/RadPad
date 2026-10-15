@@ -25,7 +25,10 @@ Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\Ra
 - Files changed by another program while open are reloaded automatically, and the reload can be undone. If the tab has unsaved changes, RadPad asks first. A file deleted while open stays in its tab, marked unsaved, so saving puts it back.
 - The Open and Save As file type lists include every loaded language, using the extensions in its definition. Save As starts on the document's language, and a new document is suggested that language's first extension.
 - Detects UTF-8, UTF-8 BOM, UTF-16 LE/BE and ANSI encodings, plus CRLF/LF/CR line endings; you can change either from the status bar
-- Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5)
+- Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, regular expressions, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5)
+- **Regular expression** in the Find panel uses JavaScript-style patterns. `^` and `$` match at the start and end of each line and `
+` matches a line break. In the replacement, `$1` (or `$&` for the whole match) inserts what was matched and `
+` and `	` insert a line break or tab.
 - Home goes to the first non-whitespace character of the line; pressing it again goes to the very start. Shift+Home selects the same way. On a wrapped row, Home first goes to the start of that row.
 - Tabs and indentation, under **Format > Tabs** or the status bar button: the Tab key inserts either a tab or spaces up to the next multiple of the indent size (1–8). Tab characters display at a chosen width (1–8 spaces, default 8). With more than one line selected, Tab indents the selected lines; Shift+Tab outdents them, or the current line if nothing is selected.
 - Word wrap, font picker (all system fonts), zoom (Ctrl+Plus/Minus/0, Ctrl+mouse wheel), status bar toggle

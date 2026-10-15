@@ -232,6 +232,8 @@
                             <FontIcon Glyph="&#xE74B;" FontSize="14" />
                         </Button>
                         <CheckBox x:Name="MatchCaseCheck" Content="Match case" MinWidth="0" Margin="12,0,0,0" />
+                        <CheckBox x:Name="RegexCheck" Content="Regular expression" MinWidth="0"
+                                  ToolTipService.ToolTip="JavaScript-style patterns. ^ and $ match at line starts and ends, \n matches a line break. In the replacement, $1 inserts a group and \n a line break." />
                         <CheckBox x:Name="WrapAroundCheck" Content="Wrap around" MinWidth="0" IsChecked="True" />
                     </StackPanel>
                     <Button Grid.Column="2" Click="CloseFind_Click" ToolTipService.ToolTip="Close (Esc)" AutomationProperties.Name="Close find">

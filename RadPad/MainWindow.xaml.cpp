@@ -78,6 +78,80 @@ namespace
         return text;
     }
 
+    // Regular expression search works on a copy of the editor text with '\n' line breaks (the editor
+    // uses '\r'), so \n in a pattern matches a line break. The copy has the same length, so positions match.
+    std::wstring ForRegex(std::wstring text)
+    {
+        std::replace(text.begin(), text.end(), L'\r', L'\n');
+        return text;
+    }
+
+    // A replacement for a regular expression match: \n and \t become a line break and a tab, \\ a
+    // backslash; $1, $& and $$ are left for std::regex to fill in.
+    std::wstring ReplacementWithEscapes(std::wstring_view text)
+    {
+        std::wstring result;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == L'\\' && i + 1 < text.size())
+            {
+                wchar_t next = text[i + 1];
+                if (next == L'n' || next == L't' || next == L'\\')
+                {
+                    result += next == L'n' ? L'\n' : next == L't' ? L'\t' : L'\\';
+                    ++i;
+                    continue;
+                }
+            }
+            result += text[i];
+        }
+        return result;
+    }
+
+    // Text with the characters that have a meaning in a regular expression escaped, so it matches itself.
+    std::wstring EscapeRegex(std::wstring_view text)
+    {
+        std::wstring result;
+        for (wchar_t c : text)
+        {
+            if (std::wstring_view{ L"\\^$.|?*+()[]{}/" }.find(c) != std::wstring_view::npos)
+            {
+                result += L'\\';
+            }
+            result += c;
+        }
+        return result;
+    }
+
+    // A readable explanation of a regex error, without the "regex_error(error_paren): " prefix.
+    std::wstring RegexErrorText(std::regex_error const& e)
+    {
+        if (e.code() == std::regex_constants::error_stack || e.code() == std::regex_constants::error_complexity)
+        {
+            return L"the pattern is too complex to search this text with";
+        }
+        std::string what = e.what();
+        size_t colon = what.find("): ");
+        what = colon == std::string::npos ? what : what.substr(colon + 3);
+        return std::wstring(what.begin(), what.end());
+    }
+
+    // The first match at or after from, as (position, length); the text before from still counts for ^ and \b.
+    std::optional<std::pair<size_t, size_t>> RegexSearch(std::wstring const& text, std::wregex const& pattern, size_t from)
+    {
+        if (from > text.size())
+        {
+            return std::nullopt;
+        }
+        std::wsmatch match;
+        auto flags = from > 0 ? std::regex_constants::match_prev_avail : std::regex_constants::match_default;
+        if (!std::regex_search(text.cbegin() + from, text.cend(), match, pattern, flags))
+        {
+            return std::nullopt;
+        }
+        return std::pair{ from + static_cast<size_t>(match.position(0)), static_cast<size_t>(match.length(0)) };
+    }
+
     bool IsChecked(Primitives::ToggleButton const& toggle)
     {
         auto value = toggle.IsChecked();
@@ -3492,7 +3566,8 @@ namespace winrt::RadPad::implementation
             std::wstring selected = SelectedText(doc->Editor);
             if (!selected.empty() && std::wstring_view{ selected }.find(L'\r') == std::wstring_view::npos)
             {
-                FindBox().Text(selected);
+                // With regular expressions on, escaped so the pattern finds this exact text.
+                FindBox().Text(IsChecked(RegexCheck()) ? EscapeRegex(selected) : selected);
             }
         }
         FindBox().Focus(FocusState::Programmatic);
@@ -3537,31 +3612,86 @@ namespace winrt::RadPad::implementation
             return false;
         }
 
-        std::wstring haystack = EditorText(doc->Editor);
-        if (!IsChecked(MatchCaseCheck()))
-        {
-            haystack = ToLower(std::move(haystack));
-            needle = ToLower(std::move(needle));
-        }
-
         bool wrap = IsChecked(WrapAroundCheck());
         size_t start = static_cast<size_t>(SelectionStart(doc->Editor));
         size_t length = static_cast<size_t>(std::max(SelectionLength(doc->Editor), 0));
-        size_t pos;
-        if (forward)
+        size_t pos = std::wstring::npos;
+        size_t matchLength = needle.size();
+
+        if (IsChecked(RegexCheck()))
         {
-            pos = haystack.find(needle, start + length);
-            if (pos == std::wstring::npos && wrap)
+            auto pattern = FindPattern();
+            if (!pattern)
             {
-                pos = haystack.find(needle);
+                return false;
+            }
+            auto text = ForRegex(EditorText(doc->Editor));
+            std::optional<std::pair<size_t, size_t>> match;
+            try
+            {
+                if (forward)
+                {
+                    match = RegexSearch(text, *pattern, start + length);
+                    // An empty match (^, say) right where the caret is would be found again and again; move on.
+                    if (match && length == 0 && match->first == start && match->second == 0)
+                    {
+                        match = RegexSearch(text, *pattern, start + 1);
+                    }
+                    if (!match && wrap)
+                    {
+                        match = RegexSearch(text, *pattern, 0);
+                    }
+                }
+                else
+                {
+                    // The last match starting before the selection; with wrap around, else the last of all.
+                    std::optional<std::pair<size_t, size_t>> before, last;
+                    for (std::wsregex_iterator it(text.cbegin(), text.cend(), *pattern), end; it != end; ++it)
+                    {
+                        std::pair<size_t, size_t> found{ static_cast<size_t>(it->position(0)), static_cast<size_t>(it->length(0)) };
+                        if (found.first < start)
+                        {
+                            before = found;
+                        }
+                        last = found;
+                    }
+                    match = before ? before : wrap ? last : std::nullopt;
+                }
+            }
+            catch (std::regex_error const& e)
+            {
+                StatusMessageText().Text(L"Can't search: " + RegexErrorText(e));
+                return false;
+            }
+            if (match)
+            {
+                pos = match->first;
+                matchLength = match->second;
             }
         }
         else
         {
-            pos = start > 0 ? haystack.rfind(needle, start - 1) : std::wstring::npos;
-            if (pos == std::wstring::npos && wrap)
+            std::wstring haystack = EditorText(doc->Editor);
+            if (!IsChecked(MatchCaseCheck()))
             {
-                pos = haystack.rfind(needle);
+                haystack = ToLower(std::move(haystack));
+                needle = ToLower(std::move(needle));
+            }
+            if (forward)
+            {
+                pos = haystack.find(needle, start + length);
+                if (pos == std::wstring::npos && wrap)
+                {
+                    pos = haystack.find(needle);
+                }
+            }
+            else
+            {
+                pos = start > 0 ? haystack.rfind(needle, start - 1) : std::wstring::npos;
+                if (pos == std::wstring::npos && wrap)
+                {
+                    pos = haystack.rfind(needle);
+                }
             }
         }
 
@@ -3573,13 +3703,32 @@ namespace winrt::RadPad::implementation
 
         StatusMessageText().Text(L"");
         bool returnFocusToFindBox = IsFocusWithin(FindPanel());
-        SelectAndReveal(doc->Editor, doc->ScrollViewer, static_cast<int>(pos), static_cast<int>(needle.size()));
+        SelectAndReveal(doc->Editor, doc->ScrollViewer, static_cast<int>(pos), static_cast<int>(matchLength));
         doc->Editor.Focus(FocusState::Programmatic);
         if (returnFocusToFindBox)
         {
             DispatcherQueue().TryEnqueue([this, strong = get_strong()] { FindBox().Focus(FocusState::Programmatic); });
         }
         return true;
+    }
+
+    std::optional<std::wregex> MainWindow::FindPattern()
+    {
+        // The find box as a regular expression; a mistake in it is shown in the status bar.
+        auto flags = std::regex_constants::ECMAScript;
+        if (!IsChecked(MatchCaseCheck()))
+        {
+            flags |= std::regex_constants::icase;
+        }
+        try
+        {
+            return std::wregex{ std::wstring{ FindBox().Text() }, flags };
+        }
+        catch (std::regex_error const& e)
+        {
+            StatusMessageText().Text(L"Invalid regular expression: " + RegexErrorText(e));
+            return std::nullopt;
+        }
     }
 
     void MainWindow::ReplaceOne()
@@ -3591,11 +3740,42 @@ namespace winrt::RadPad::implementation
             return;
         }
 
-        std::wstring selected = SelectedText(doc->Editor);
-        bool matches = IsChecked(MatchCaseCheck()) ? selected == needle : ToLower(selected) == ToLower(needle);
-        if (matches)
+        // Replace the selection if it's a match (found by Find next), then find the next one.
+        if (IsChecked(RegexCheck()))
         {
-            InsertText(doc->Editor, ReplaceBox().Text());
+            auto pattern = FindPattern();
+            if (!pattern)
+            {
+                return;
+            }
+            auto text = ForRegex(EditorText(doc->Editor));
+            size_t start = static_cast<size_t>(SelectionStart(doc->Editor));
+            size_t length = static_cast<size_t>(std::max(SelectionLength(doc->Editor), 0));
+            try
+            {
+                std::wsmatch match;
+                auto flags = std::regex_constants::match_continuous | (start > 0 ? std::regex_constants::match_prev_avail : std::regex_constants::match_default);
+                if (start <= text.size() && std::regex_search(text.cbegin() + start, text.cend(), match, *pattern, flags)
+                    && static_cast<size_t>(match.length(0)) == length)
+                {
+                    auto replacement = match.format(ReplacementWithEscapes(ReplaceBox().Text()));
+                    InsertText(doc->Editor, textfile::NormalizeLineBreaks(replacement));
+                }
+            }
+            catch (std::regex_error const& e)
+            {
+                StatusMessageText().Text(L"Can't replace: " + RegexErrorText(e));
+                return;
+            }
+        }
+        else
+        {
+            std::wstring selected = SelectedText(doc->Editor);
+            bool matches = IsChecked(MatchCaseCheck()) ? selected == needle : ToLower(selected) == ToLower(needle);
+            if (matches)
+            {
+                InsertText(doc->Editor, ReplaceBox().Text());
+            }
         }
         FindNext(true);
     }
@@ -3609,20 +3789,45 @@ namespace winrt::RadPad::implementation
             return;
         }
 
-        bool matchCase = IsChecked(MatchCaseCheck());
         std::wstring text = EditorText(doc->Editor);
-        std::wstring searchText = matchCase ? text : ToLower(text);
-        std::wstring searchKey = matchCase ? needle : ToLower(needle);
-        std::wstring replacement{ ReplaceBox().Text() };
-
         std::wstring result;
         size_t count = 0;
-        size_t last = 0;
-        for (size_t pos; (pos = searchText.find(searchKey, last)) != std::wstring::npos; last = pos + searchKey.size())
+        if (IsChecked(RegexCheck()))
         {
-            result.append(text, last, pos - last);
-            result += replacement;
-            ++count;
+            auto pattern = FindPattern();
+            if (!pattern)
+            {
+                return;
+            }
+            try
+            {
+                auto searchText = ForRegex(text);
+                count = static_cast<size_t>(std::distance(std::wsregex_iterator(searchText.cbegin(), searchText.cend(), *pattern), std::wsregex_iterator()));
+                if (count > 0)
+                {
+                    result = textfile::NormalizeLineBreaks(std::regex_replace(searchText, *pattern, ReplacementWithEscapes(ReplaceBox().Text())));
+                }
+            }
+            catch (std::regex_error const& e)
+            {
+                StatusMessageText().Text(L"Can't replace: " + RegexErrorText(e));
+                return;
+            }
+        }
+        else
+        {
+            bool matchCase = IsChecked(MatchCaseCheck());
+            std::wstring searchText = matchCase ? text : ToLower(text);
+            std::wstring searchKey = matchCase ? needle : ToLower(needle);
+            std::wstring replacement{ ReplaceBox().Text() };
+            size_t last = 0;
+            for (size_t pos; (pos = searchText.find(searchKey, last)) != std::wstring::npos; last = pos + searchKey.size())
+            {
+                result.append(text, last, pos - last);
+                result += replacement;
+                ++count;
+            }
+            result.append(text, last);
         }
 
         if (count == 0)
@@ -3630,7 +3835,6 @@ namespace winrt::RadPad::implementation
             StatusMessageText().Text(std::format(L"Cannot find \"{}\"", needle));
             return;
         }
-        result.append(text, last);
 
         // Replace via the selection so the whole operation is a single undo step. The new text all takes
         // one format, so the whole document is recoloured.
