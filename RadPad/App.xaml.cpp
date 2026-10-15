@@ -31,6 +31,7 @@ namespace winrt::RadPad::implementation
             return;
         }
 
+        instance::SetProcessAppId();
         m_window = make<MainWindow>();
         m_window.Activate();
     }

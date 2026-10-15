@@ -7,6 +7,15 @@ namespace instance
     // sends the files to that window, brings it to the front and returns true. The caller should then exit.
     bool ForwardCommandLineToExistingWindow();
 
+    // Gives the process an explicit app ID, which its windows, taskbar buttons and jump list share.
+    // Call before any window is created.
+    void SetProcessAppId();
+
+    // Tells the taskbar how to start another RadPad from hwnd's button (middle-click or Shift+click): its app
+    // ID, and a relaunch command that starts this exe without files. Without these, the taskbar can't work
+    // out what to start for an unpackaged WinUI app, and does nothing.
+    void SetTaskbarRelaunch(HWND hwnd);
+
     // Marks hwnd as a RadPad window that accepts files from ForwardCommandLineToExistingWindow.
     // openFiles is called on the window's thread with full paths.
     void AcceptForwardedFiles(HWND hwnd, std::function<void(std::vector<std::wstring>)> openFiles);

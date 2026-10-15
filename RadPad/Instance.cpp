@@ -9,6 +9,9 @@ namespace
     constexpr wchar_t WindowProperty[] = L"RadPad.MainWindow";
     constexpr ULONG_PTR OpenFilesMessage = 0x4D4E4F46; // 'MNOF'
 
+    // The app ID shared by RadPad's process, windows and jump list (Company.Product form).
+    constexpr wchar_t AppId[] = L"RadPad.RadPad";
+
     std::vector<std::wstring> CommandLineFiles()
     {
         // Paths are made absolute here, as the receiving window has a different working directory.
@@ -149,6 +152,40 @@ namespace instance
             }
         }
         return false;
+    }
+
+    void SetProcessAppId()
+    {
+        SetCurrentProcessExplicitAppUserModelID(AppId);
+    }
+
+    void SetTaskbarRelaunch(HWND hwnd)
+    {
+        std::wstring exe(32768, L'\0');
+        exe.resize(GetModuleFileNameW(nullptr, exe.data(), static_cast<DWORD>(exe.size())));
+        try
+        {
+            com_ptr<IPropertyStore> store;
+            check_hresult(SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(store.put())));
+            auto set = [&](PROPERTYKEY const& key, std::wstring const& value)
+            {
+                PROPVARIANT variant;
+                check_hresult(InitPropVariantFromString(value.c_str(), &variant));
+                HRESULT hr = store->SetValue(key, variant);
+                PropVariantClear(&variant);
+                check_hresult(hr);
+            };
+            // The relaunch properties only count when all three are set, with the ID set first.
+            set(PKEY_AppUserModel_ID, AppId);
+            set(PKEY_AppUserModel_RelaunchCommand, L"\"" + exe + L"\"");
+            set(PKEY_AppUserModel_RelaunchDisplayNameResource, L"RadPad");
+            set(PKEY_AppUserModel_RelaunchIconResource, exe + L",0");
+            check_hresult(store->Commit());
+        }
+        catch (hresult_error const&)
+        {
+            // The taskbar falls back to its own guess.
+        }
     }
 
     void AcceptForwardedFiles(HWND hwnd, std::function<void(std::vector<std::wstring>)> openFiles)

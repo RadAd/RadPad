@@ -853,6 +853,8 @@ namespace winrt::RadPad::implementation
 
         appWindow.Resize({ MulDiv(1100, dpi, 96), MulDiv(760, dpi, 96) });
 
+        instance::SetTaskbarRelaunch(WindowHandle());
+
         // Files opened from the command line (e.g. the jump list or Explorer) while this window is open.
         instance::AcceptForwardedFiles(WindowHandle(), [this](std::vector<std::wstring> const& files)
         {
