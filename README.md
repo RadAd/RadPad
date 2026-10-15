@@ -32,15 +32,13 @@ The version is set in `RadPad/Version.h`, and only there. It's used for the exe'
 ## Features
 - Tabs in the title bar: new (Ctrl+N / Ctrl+T / +), close (Ctrl+W, Ctrl+F4), switch to recently used tabs (Ctrl+Tab goes to the previous tab; hold Ctrl and press Tab again to go further back, Ctrl+Shift+Tab to go the other way), jump to a tab (Ctrl+1..9), reorder by dragging
 - Right-click a tab to copy its file name or full path, open its folder in Explorer with the file selected, or close it, the other tabs, or the tabs to its right
-- **Tools** menu: your own external programs, run on the current file (see below)
+- **Tools** menu: your own external programs, run on the current file (see below). Tools such as compilers and linters can show their output in a panel below the editor, where double-clicking an error opens the file at that line.
 - Open (multi-select), Save, Save As (with an Encoding picker), Save All (Ctrl+Alt+S); prompts to save when closing a tab or the window
 - Files changed by another program while open are reloaded automatically, and the reload can be undone. If the tab has unsaved changes, RadPad asks first. A file deleted while open stays in its tab, marked unsaved, so saving puts it back.
 - The Open and Save As file type lists include every loaded language, using the extensions in its definition. Save As starts on the document's language, and a new document is suggested that language's first extension.
 - Detects UTF-8, UTF-8 BOM, UTF-16 LE/BE and ANSI encodings, plus CRLF/LF/CR line endings; you can change either from the status bar
 - Undo/Redo, Cut/Copy/Paste, Find/Replace (match case, regular expressions, wrap around, F3 / Shift+F3), Go to line (Ctrl+G), Time/Date (F5)
-- **Regular expression** in the Find panel uses JavaScript-style patterns. `^` and `$` match at the start and end of each line and `
-` matches a line break. In the replacement, `$1` (or `$&` for the whole match) inserts what was matched and `
-` and `	` insert a line break or tab.
+- **Regular expression** in the Find panel uses JavaScript-style patterns. `^` and `$` match at the start and end of each line and `\n` matches a line break. In the replacement, `$1` (or `$&` for the whole match) inserts what was matched and `\n` and `\t` insert a line break or tab.
 - Home goes to the first non-whitespace character of the line; pressing it again goes to the very start. Shift+Home selects the same way. On a wrapped row, Home first goes to the start of that row.
 - **Ctrl+]** goes to the matching bracket (also **Edit > Go to matching bracket**): from next to a bracket to its partner, or from inside brackets to the closing one. **Ctrl+Shift+]** selects from one bracket to the other. Brackets in strings and comments are skipped.
 - Tabs and indentation, under **Format > Tabs** or the status bar button: the Tab key inserts either a tab or spaces up to the next multiple of the indent size (1–8). Tab characters display at a chosen width (1–8 spaces, default 8). With more than one line selected, Tab indents the selected lines; Shift+Tab outdents them, or the current line if nothing is selected.
@@ -157,7 +155,7 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property`, `macro` and `bracket1` to `bracket3` (the rainbow bracket colours); any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour, and the bracket colours, which use VS Code's. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
 
 ## External tools
-The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away,, and mistakes are reported in a message.
+The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away, and mistakes are reported in a message.
 
 ```json
 {
@@ -167,7 +165,8 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
       { "name": "Run script", "command": "cmd.exe", "arguments": "/k python \"$(FileName)\"" },
       { "name": "Run tests", "command": "cmd.exe", "arguments": "/k python -m pytest" }
     ] },
-    { "name": "Show in Explorer", "command": "explorer.exe", "arguments": "/select,\"$(FilePath)\"", "saveFirst": false }
+    { "name": "Show in Explorer", "command": "explorer.exe", "arguments": "/select,\"$(FilePath)\"", "saveFirst": false },
+    { "name": "Lint", "command": "ruff", "arguments": "check \"$(FileName)\"", "output": "panel" }
   ]
 }
 ```
@@ -182,5 +181,13 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 | `icon` | Optional. An image file (`.png`, `.ico` …), a program, or `"file,index"` for one of the icons in an `.exe` or `.dll`, such as `"shell32.dll,4"`. Environment variables like `%ProgramFiles%` work. Without it, the menu shows the icon of the program `command` runs. A `.cmd` launcher in a `bin` folder beside its app (as VS Code installs) shows the app's icon. |
 | `glyph` | Optional. A symbol from Windows' Segoe Fluent Icons font instead of an icon, as a character code such as `"E756"`. |
 | `tools` | Makes the entry a folder: a submenu of the tools (and folders) listed here, instead of a tool with a `command`. A folder can have an `icon` or `glyph`. |
+| `output` | `"panel"` runs the tool without a window and shows what it writes in the output panel (see below). Without it, the tool runs in its own window as usual. |
+| `errorPattern` | Optional, with `"output": "panel"`. A regular expression that finds a file name (group 1), line (group 2) and optionally column (group 3) in a line of output, for tools whose messages the built-in patterns don't recognise. |
+| `outputEncoding` | Optional, with `"output": "panel"`: `"utf-8"`, `"oem"` (the console code page, used by `cmd` and older tools) or `"ansi"`. Without it, output is read as UTF-8 until something that isn't valid UTF-8 appears, then as the console code page. |
 
 `command`, `arguments` and `workingDirectory` can use `$(FilePath)` (the full path), `$(FileDir)` (its folder), `$(FileName)`, `$(FileNameNoExt)`, `$(Line)` and `$(Column)` (the cursor's position). An untitled document is always saved before a tool runs, as there's no file to give it otherwise.
+
+### Output panel
+A tool with `"output": "panel"` runs through `cmd.exe` with no window and nothing on its input, so it can't wait for typing. Its output appears in a panel above the status bar, errors (what it writes to its error stream) in red, followed by its exit code and how long it took. **View > Output panel** shows or hides the panel, and dragging its top edge or its heading resizes it; both are remembered. While a tool runs, **Stop** ends it and anything it started. Only one tool runs in the panel at a time: starting another asks whether to stop the first.
+
+Double-clicking a line of output, or pressing Enter on it, opens the file it names at that line and column. RadPad recognises `file(line,column):` (Microsoft compilers and MSBuild), `file:line:column:` (gcc, clang, Rust, TypeScript, `grep -n` and many others) and Python's `File "file", line n`, plus the tool's own `errorPattern`. A relative file name is looked for in the folder the tool ran in, then beside the current file. If neither exists, the status bar says so. The panel keeps about the last million characters of output.

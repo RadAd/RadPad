@@ -101,6 +101,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <MenuBar x:Name="MainMenu" Grid.Row="0">
@@ -247,6 +249,7 @@
                         <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Click="ZoomReset_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
                     </MenuFlyoutSubItem>
                     <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True" />
+                    <ToggleMenuFlyoutItem x:Name="OutputPanelItem" Text="Output panel" Click="OutputPanel_Click" />
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
                     <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
                     <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
@@ -329,9 +332,86 @@
                 <Canvas x:Name="EditorOverlay" IsHitTestVisible="False" Canvas.ZIndex="1" />
             </Grid>
 
+            <!-- Output panel for tools run with "output": "panel" (Tools menu), resized by dragging the bar above it
+                 or the panel's heading. Both show the resize pointer, set in code. -->
+            <Border x:Name="OutputSplitter"
+                    Grid.Row="3"
+                    Height="8"
+                    Visibility="Collapsed"
+                    Background="Transparent"
+                    PointerPressed="OutputSplitter_PointerPressed"
+                    PointerMoved="OutputSplitter_PointerMoved"
+                    PointerReleased="OutputSplitter_PointerReleased"
+                    PointerCaptureLost="OutputSplitter_PointerCaptureLost">
+                <Grid>
+                    <Border Height="1" VerticalAlignment="Bottom" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                    <Border x:Name="OutputSplitterHighlight" Height="3" VerticalAlignment="Bottom" Opacity="0"
+                            Background="{ThemeResource AccentFillColorDefaultBrush}" />
+                </Grid>
+            </Border>
+            <Grid x:Name="OutputPanel" Grid.Row="4" Height="200" Visibility="Collapsed">
+                <Grid.Resources>
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                </Grid.Resources>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid x:Name="OutputHeader"
+                      Padding="12,2,4,2"
+                      ColumnSpacing="8"
+                      Background="Transparent"
+                      PointerPressed="OutputSplitter_PointerPressed"
+                      PointerMoved="OutputSplitter_PointerMoved"
+                      PointerReleased="OutputSplitter_PointerReleased"
+                      PointerCaptureLost="OutputSplitter_PointerCaptureLost">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Output" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="OutputStatusText" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                        <Button x:Name="OutputStopButton" Click="OutputStop_Click" IsEnabled="False" Style="{StaticResource StatusBarButtonStyle}"
+                                ToolTipService.ToolTip="Stop the tool" AutomationProperties.Name="Stop">
+                            <FontIcon Glyph="&#xE71A;" FontSize="14" />
+                        </Button>
+                        <Button Click="OutputClear_Click" Style="{StaticResource StatusBarButtonStyle}"
+                                ToolTipService.ToolTip="Clear output" AutomationProperties.Name="Clear output">
+                            <FontIcon Glyph="&#xE75C;" FontSize="14" />
+                        </Button>
+                        <Button Click="OutputClose_Click" Style="{StaticResource StatusBarButtonStyle}"
+                                ToolTipService.ToolTip="Close the panel (the tool keeps running)" AutomationProperties.Name="Close output">
+                            <FontIcon Glyph="&#xE711;" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <!-- Double-clicking a line that names a file and line, or pressing Enter on it, opens it there
+                     (handlers added in code, as the box handles those events itself). -->
+                <RichEditBox x:Name="OutputBox"
+                             Grid.Row="1"
+                             IsReadOnly="True"
+                             IsSpellCheckEnabled="False"
+                             IsTextPredictionEnabled="False"
+                             TextWrapping="NoWrap"
+                             BorderThickness="0"
+                             Padding="12,4,12,4"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             AutomationProperties.Name="Tool output" />
+            </Grid>
+
             <!-- Status bar -->
             <Grid x:Name="StatusBar"
-                  Grid.Row="3"
+                  Grid.Row="5"
                   Height="30"
                   Padding="8,0"
                   BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"

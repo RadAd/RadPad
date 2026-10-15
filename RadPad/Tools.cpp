@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <winrt/Windows.Data.Json.h>
 #include <wincodec.h>
+#include <atomic>
+#include <regex>
+#include <thread>
 
 using winrt::Windows::Data::Json::JsonObject;
 using winrt::Windows::Data::Json::JsonValueType;
@@ -221,6 +224,30 @@ namespace tools
                         }
                         tool.SaveFirst = entry.GetNamedBoolean(L"saveFirst");
                     }
+                    auto output = ReadString(entry, L"output", false);
+                    if (!output.empty() && output != L"panel" && output != L"window")
+                    {
+                        Invalid(L"\"output\" must be \"panel\" or \"window\"");
+                    }
+                    tool.CaptureOutput = output == L"panel";
+                    tool.ErrorPattern = ReadString(entry, L"errorPattern", false);
+                    if (!tool.ErrorPattern.empty())
+                    {
+                        try
+                        {
+                            std::wregex check{ tool.ErrorPattern };
+                        }
+                        catch (std::regex_error const&)
+                        {
+                            Invalid(L"\"errorPattern\" isn't a valid regular expression");
+                        }
+                    }
+                    tool.OutputEncoding = ReadString(entry, L"outputEncoding", false);
+                    std::wstring_view encodings[] = { L"", L"auto", L"utf-8", L"oem", L"ansi" };
+                    if (std::find(std::begin(encodings), std::end(encodings), tool.OutputEncoding) == std::end(encodings))
+                    {
+                        Invalid(L"\"outputEncoding\" must be \"utf-8\", \"oem\", \"ansi\" or \"auto\"");
+                    }
                     result.push_back(std::move(tool));
                 }
                 catch (winrt::hresult_error const& e)
@@ -363,6 +390,266 @@ namespace tools
         {
             return false; // no icon rather than an error: the tool still works
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Running a tool with its output captured
+    // ---------------------------------------------------------------------------------------------
+
+    namespace
+    {
+        // Turns the bytes a tool writes into text. With no encoding given, output is read as UTF-8 until
+        // something that isn't valid UTF-8 turns up, then in the console's code page (which cmd's own
+        // commands use). Line breaks become '\r'; a lone '\r' (progress lines that rewrite themselves) is dropped.
+        class OutputDecoder
+        {
+        public:
+            explicit OutputDecoder(std::wstring const& encoding)
+            {
+                if (encoding == L"utf-8") m_codePage = CP_UTF8, m_detect = false;
+                else if (encoding == L"oem") m_codePage = GetOEMCP(), m_detect = false;
+                else if (encoding == L"ansi") m_codePage = GetACP(), m_detect = false;
+            }
+
+            std::wstring Decode(char const* data, size_t size, bool last)
+            {
+                m_bytes.append(data, size);
+                // A UTF-8 character split between reads waits for the rest.
+                size_t complete = m_bytes.size();
+                if (m_codePage == CP_UTF8 && !last)
+                {
+                    for (size_t back = 1; back <= 3 && back <= m_bytes.size(); ++back)
+                    {
+                        auto c = static_cast<unsigned char>(m_bytes[m_bytes.size() - back]);
+                        if ((c & 0xC0) == 0x80)
+                        {
+                            continue; // a continuation byte
+                        }
+                        size_t length = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+                        if (length > back)
+                        {
+                            complete = m_bytes.size() - back;
+                        }
+                        break;
+                    }
+                }
+                std::wstring text = Convert(std::string_view{ m_bytes }.substr(0, complete));
+                m_bytes.erase(0, complete);
+                return Normalize(text, last);
+            }
+
+        private:
+            std::wstring Convert(std::string_view bytes)
+            {
+                if (bytes.empty())
+                {
+                    return {};
+                }
+                auto convert = [&](UINT codePage, DWORD flags)
+                {
+                    int length = MultiByteToWideChar(codePage, flags, bytes.data(), static_cast<int>(bytes.size()), nullptr, 0);
+                    std::wstring text(static_cast<size_t>(std::max(length, 0)), L'\0');
+                    if (length > 0)
+                    {
+                        MultiByteToWideChar(codePage, flags, bytes.data(), static_cast<int>(bytes.size()), text.data(), length);
+                    }
+                    return std::pair{ length > 0, text };
+                };
+                if (m_detect && m_codePage == CP_UTF8)
+                {
+                    if (auto [ok, text] = convert(CP_UTF8, MB_ERR_INVALID_CHARS); ok)
+                    {
+                        return text;
+                    }
+                    m_codePage = GetOEMCP(); // not UTF-8 after all
+                }
+                return convert(m_codePage, 0).second;
+            }
+
+            std::wstring Normalize(std::wstring const& text, bool last)
+            {
+                std::wstring result;
+                std::wstring input = m_pendingCR ? L"\r" + text : text;
+                m_pendingCR = false;
+                for (size_t i = 0; i < input.size(); ++i)
+                {
+                    wchar_t c = input[i];
+                    if (c == L'\r')
+                    {
+                        if (i + 1 == input.size() && !last)
+                        {
+                            m_pendingCR = true; // a \r\n split between reads
+                        }
+                        else if (input[i + 1 < input.size() ? i + 1 : i] == L'\n' && i + 1 < input.size())
+                        {
+                            result += L'\r';
+                            ++i;
+                        }
+                        continue;
+                    }
+                    result += c == L'\n' ? L'\r' : c;
+                }
+                return result;
+            }
+
+            UINT m_codePage{ CP_UTF8 };
+            bool m_detect{ true };
+            std::string m_bytes;
+            bool m_pendingCR{ false };
+        };
+
+        void CloseIfOpen(HANDLE& handle)
+        {
+            if (handle && handle != INVALID_HANDLE_VALUE)
+            {
+                CloseHandle(handle);
+            }
+            handle = nullptr;
+        }
+    }
+
+    RunningTool::~RunningTool()
+    {
+        // Closing the job ends the tool and everything it started, if they're still running.
+        CloseIfOpen(m_process);
+        CloseIfOpen(m_job);
+    }
+
+    void RunningTool::Stop()
+    {
+        if (m_running)
+        {
+            m_stopped = true;
+            TerminateJobObject(m_job, 1);
+        }
+    }
+
+    std::shared_ptr<RunningTool> StartCaptured(Tool const& tool, FileContext const& file, RunningTool::Events events,
+                                               std::wstring& commandLine, std::wstring& directory, std::wstring& error)
+    {
+        // Through cmd.exe, so batch files, cmd's own commands and anything on the PATH all work.
+        auto command = Expand(tool.Command, file);
+        auto arguments = Expand(tool.Arguments, file);
+        directory = tool.WorkingDirectory.empty() ? std::filesystem::path{ file.Path }.parent_path().wstring() : Expand(tool.WorkingDirectory, file);
+        bool needsQuotes = command.find_first_of(L" \t&()^") != std::wstring::npos && command.front() != L'"';
+        commandLine = (needsQuotes ? L"\"" + command + L"\"" : command) + (arguments.empty() ? L"" : L" " + arguments);
+        std::wstring shell(MAX_PATH, L'\0');
+        shell.resize(GetEnvironmentVariableW(L"ComSpec", shell.data(), MAX_PATH));
+        if (shell.empty())
+        {
+            shell = L"cmd.exe";
+        }
+        std::wstring fullCommand = L"\"" + shell + L"\" /d /s /c \"" + commandLine + L"\"";
+
+        // Pipes for its output and errors, and the null device as its input so it can't wait for typing.
+        SECURITY_ATTRIBUTES inherit{ sizeof(inherit), nullptr, TRUE };
+        HANDLE outRead{}, outWrite{}, errRead{}, errWrite{};
+        HANDLE input = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &inherit, OPEN_EXISTING, 0, nullptr);
+        auto cleanUp = [&]
+        {
+            CloseIfOpen(outRead); CloseIfOpen(outWrite); CloseIfOpen(errRead); CloseIfOpen(errWrite); CloseIfOpen(input);
+        };
+        if (input == INVALID_HANDLE_VALUE || !CreatePipe(&outRead, &outWrite, &inherit, 0) || !CreatePipe(&errRead, &errWrite, &inherit, 0))
+        {
+            error = winrt::hresult_error(HRESULT_FROM_WIN32(GetLastError())).message();
+            cleanUp();
+            return nullptr;
+        }
+        SetHandleInformation(outRead, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(errRead, HANDLE_FLAG_INHERIT, 0);
+
+        // Only these three handles are passed on to the tool.
+        HANDLE inherited[] = { input, outWrite, errWrite };
+        SIZE_T attributeSize = 0;
+        InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeSize);
+        std::vector<char> attributeBuffer(attributeSize);
+        auto attributes = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeBuffer.data());
+        InitializeProcThreadAttributeList(attributes, 1, 0, &attributeSize);
+        UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), nullptr, nullptr);
+
+        STARTUPINFOEXW startup{};
+        startup.StartupInfo.cb = sizeof(startup);
+        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        startup.StartupInfo.hStdInput = input;
+        startup.StartupInfo.hStdOutput = outWrite;
+        startup.StartupInfo.hStdError = errWrite;
+        startup.lpAttributeList = attributes;
+
+        // In a job, so stopping it (or closing RadPad) also ends anything it started.
+        auto running = std::make_shared<RunningTool>();
+        running->m_job = CreateJobObjectW(nullptr, nullptr);
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(running->m_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+
+        PROCESS_INFORMATION process{};
+        BOOL started = CreateProcessW(nullptr, fullCommand.data(), nullptr, nullptr, TRUE,
+                                      CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
+                                      nullptr, directory.empty() ? nullptr : directory.c_str(), &startup.StartupInfo, &process);
+        DWORD startError = GetLastError();
+        DeleteProcThreadAttributeList(attributes);
+        CloseIfOpen(outWrite);
+        CloseIfOpen(errWrite);
+        CloseIfOpen(input);
+        if (!started)
+        {
+            error = winrt::hresult_error(HRESULT_FROM_WIN32(startError)).message();
+            cleanUp();
+            return nullptr;
+        }
+        AssignProcessToJobObject(running->m_job, process.hProcess);
+        ResumeThread(process.hThread);
+        CloseHandle(process.hThread);
+        running->m_process = process.hProcess;
+
+        // One thread reads each stream; another waits for the tool to finish. They keep the RunningTool alive.
+        auto events_ = std::make_shared<RunningTool::Events>(std::move(events));
+        auto encoding = tool.OutputEncoding;
+        auto reader = [running, events_, encoding](HANDLE pipe, bool isError)
+        {
+            OutputDecoder decoder{ encoding };
+            char buffer[8192];
+            DWORD read = 0;
+            while (ReadFile(pipe, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+            {
+                if (auto text = decoder.Decode(buffer, read, false); !text.empty())
+                {
+                    events_->Output(std::move(text), isError);
+                }
+            }
+            if (auto text = decoder.Decode(nullptr, 0, true); !text.empty())
+            {
+                events_->Output(std::move(text), isError);
+            }
+            CloseHandle(pipe);
+        };
+        auto outThread = std::make_shared<std::thread>(reader, outRead, false);
+        auto errThread = std::make_shared<std::thread>(reader, errRead, true);
+        std::thread([running, events_, outThread, errThread]
+        {
+            WaitForSingleObject(running->m_process, INFINITE);
+            DWORD exitCode = 0;
+            GetExitCodeProcess(running->m_process, &exitCode);
+            // Output still in the pipes is read first. Something the tool started may keep a pipe open
+            // after it exits, so stop reading after a moment.
+            for (auto const& thread : { outThread, errThread })
+            {
+                auto handle = static_cast<HANDLE>(thread->native_handle());
+                if (WaitForSingleObject(handle, 2000) == WAIT_TIMEOUT)
+                {
+                    do
+                    {
+                        CancelSynchronousIo(handle); // retried in case it was between reads
+                    } while (WaitForSingleObject(handle, 100) == WAIT_TIMEOUT);
+                }
+                thread->join();
+            }
+            // Not running only once Finished has been called, so a caller that waits for that knows the
+            // Finished event has been raised.
+            events_->Finished(running->m_stopped ? std::nullopt : std::optional<DWORD>{ exitCode });
+            running->m_running = false;
+        }).detach();
+        return running;
     }
 
     std::wstring ExampleToolsFile()

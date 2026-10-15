@@ -125,6 +125,14 @@ namespace winrt::RadPad::implementation
         void TabClose_Click(Sender const&, ClickArgs const&);
         void TabCloseOthers_Click(Sender const&, ClickArgs const&);
         void TabCloseRight_Click(Sender const&, ClickArgs const&);
+        void OutputPanel_Click(Sender const&, ClickArgs const&);
+        void OutputStop_Click(Sender const&, ClickArgs const&);
+        void OutputClear_Click(Sender const&, ClickArgs const&);
+        void OutputClose_Click(Sender const&, ClickArgs const&);
+        void OutputSplitter_PointerPressed(Sender const&, Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&);
+        void OutputSplitter_PointerMoved(Sender const&, Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&);
+        void OutputSplitter_PointerReleased(Sender const&, Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&);
+        void OutputSplitter_PointerCaptureLost(Sender const&, Microsoft::UI::Xaml::Input::PointerRoutedEventArgs const&);
 
     private:
         // Documents and tabs
@@ -182,6 +190,16 @@ namespace winrt::RadPad::implementation
         void AddToolItems(Windows::Foundation::Collections::IVector<Microsoft::UI::Xaml::Controls::MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize);
         void RunTool(tools::Tool const& tool);
         void EditTools();
+
+        // Output panel: tools run with their output captured
+        enum class OutputColor { Normal, Error, Info };
+        fire_and_forget RunToolInPanelAsync(tools::Tool tool, tools::FileContext file);
+        void OnToolFinished(std::optional<DWORD> exitCode);
+        void ShowOutputPanel(bool show);
+        void HighlightOutputSplitter(bool highlight);
+        void AppendOutput(std::wstring_view text, OutputColor color);
+        bool OpenOutputLocation(std::wstring const& line);
+        bool OpenOutputLocationAtCaret();
 
         // Colour themes
         void BuildColorThemeMenu();
@@ -280,6 +298,16 @@ namespace winrt::RadPad::implementation
         std::vector<std::wstring> m_themeErrors;    // from loading the colour themes
         std::vector<tools::Tool> m_tools;           // the Tools menu
         std::vector<std::wstring> m_toolErrors;     // from loading the tools file
+        std::shared_ptr<tools::RunningTool> m_runningTool; // the tool running in the output panel, if any
+        int m_runId{ 0 };                           // counts runs, so output from an earlier one is ignored
+        std::wstring m_runName;                     // the tool last run in the output panel
+        std::wstring m_runDirectory;                // and the folder it ran in, for relative paths in its output
+        std::wstring m_runErrorPattern;
+        std::chrono::steady_clock::time_point m_runStart;
+        bool m_outputPanelVisible{ false };
+        double m_outputPanelHeight{ 200 };
+        double m_splitterDragStart{ -1 };           // pointer position when dragging the splitter began, or -1
+        double m_splitterStartHeight{ 0 };
         std::wstring m_colorTheme{ themes::DefaultThemeName };
         themes::Palette m_palette;                  // the colour theme's colours for the app's light or dark mode
         std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, int>> m_themeItems; // in the Color theme menu
