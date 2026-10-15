@@ -84,7 +84,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>dwrite.lib;shell32.lib;shlwapi.lib;propsys.lib;comctl32.lib;ole32.lib;user32.lib;kernel32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dwrite.lib;shell32.lib;shlwapi.lib;propsys.lib;comctl32.lib;windowscodecs.lib;gdi32.lib;ole32.lib;user32.lib;kernel32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
@@ -111,6 +111,7 @@
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Syntax.h" />
     <ClInclude Include="Themes.h" />
+    <ClInclude Include="Tools.h" />
     <ClInclude Include="TextFile.h" />
     <ClInclude Include="App.xaml.h">
       <DependentUpon>App.xaml</DependentUpon>
@@ -130,6 +131,7 @@
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
     <ClCompile Include="Themes.cpp" />
+    <ClCompile Include="Tools.cpp" />
     <ClCompile Include="TextFile.cpp" />
     <ClCompile Include="App.xaml.cpp">
       <DependentUpon>App.xaml</DependentUpon>

@@ -445,6 +445,13 @@ namespace
         return directory.empty() ? std::wstring{} : directory + L"\\Languages";
     }
 
+    // %LOCALAPPDATA%\RadPad\tools.json: the user's external tools (Tools menu).
+    std::wstring ToolsFilePath()
+    {
+        std::wstring directory = AppDataFolder();
+        return directory.empty() ? std::wstring{} : directory + L"\\tools.json";
+    }
+
     // %LOCALAPPDATA%\RadPad\Themes: colour themes added or customised by the user.
     std::wstring UserThemeFolder()
     {
@@ -775,6 +782,7 @@ namespace winrt::RadPad::implementation
         m_languageErrors = syntax::LoadLanguages(LanguageFolders());
         BuildLanguageMenus();
         m_themeErrors = themes::LoadThemes(ThemeFolders());
+        ReloadTools();
         BuildColorThemeMenu();
         ApplyColorTheme();
         BuildIndentMenus();
@@ -820,7 +828,7 @@ namespace winrt::RadPad::implementation
         {
             CreateDocument();
         }
-        if (!m_languageErrors.empty() || !m_themeErrors.empty())
+        if (!m_languageErrors.empty() || !m_themeErrors.empty() || !m_toolErrors.empty())
         {
             ShowLoadErrors();
         }
@@ -1387,7 +1395,113 @@ namespace winrt::RadPad::implementation
         }
         SHAddToRecentDocs(SHARD_PATHW, path.c_str());
         AddRecentFile(path);
+        if (PathsEqual(path, ToolsFilePath()))
+        {
+            ReloadTools(); // edited with Tools > Edit tools
+        }
         return true;
+    }
+
+    void MainWindow::ReloadTools()
+    {
+        m_toolErrors.clear();
+        m_tools = tools::LoadTools(ToolsFilePath(), m_toolErrors);
+        BuildToolsMenu();
+        if (m_loaded && !m_toolErrors.empty())
+        {
+            ShowLoadErrors();
+        }
+    }
+
+    void MainWindow::BuildToolsMenu()
+    {
+        // One at a time: once a menu bar menu has been opened, Clear() doesn't reach the open menu, while
+        // removing single items does.
+        auto items = ToolsMenu().Items();
+        while (items.Size() > 0)
+        {
+            items.RemoveAtEnd();
+        }
+        // Menu icons are 16 pixels at 100% scaling; load them at the screen's size so they're sharp.
+        int iconSize = MulDiv(16, static_cast<int>(GetDpiForWindow(WindowHandle())), 96);
+        for (auto const& tool : m_tools)
+        {
+            MenuFlyoutItem item;
+            item.Text(tool.Name);
+            std::vector<uint8_t> pixels;
+            if (!tool.Glyph.empty())
+            {
+                FontIcon icon;
+                icon.Glyph(tool.Glyph);
+                item.Icon(icon);
+            }
+            else if (tools::LoadToolIcon(tool, iconSize, pixels))
+            {
+                Media::Imaging::WriteableBitmap bitmap{ iconSize, iconSize };
+                memcpy(bitmap.PixelBuffer().data(), pixels.data(), pixels.size());
+                bitmap.Invalidate();
+                ImageIcon icon;
+                icon.Source(bitmap);
+                item.Icon(icon);
+            }
+            item.Click([this, tool](auto&&, auto&&) { RunTool(tool); });
+            items.Append(item);
+        }
+        if (m_tools.empty())
+        {
+            MenuFlyoutItem none;
+            none.Text(L"No tools");
+            none.IsEnabled(false);
+            items.Append(none);
+        }
+        items.Append(MenuFlyoutSeparator{});
+        MenuFlyoutItem edit;
+        edit.Text(L"Edit tools...");
+        edit.Click([this](auto&&, auto&&) { EditTools(); });
+        items.Append(edit);
+    }
+
+    void MainWindow::RunTool(tools::Tool const& tool)
+    {
+        // The tool is given the file, so an untitled document has to be saved first, and by default
+        // unsaved changes are saved so the tool sees what's on screen.
+        auto doc = CurrentDocument();
+        if (!doc)
+        {
+            return;
+        }
+        if (doc->Path.empty() || (tool.SaveFirst && doc->IsDirty))
+        {
+            if (!SaveDocument(doc, doc->Path.empty()))
+            {
+                return;
+            }
+        }
+
+        auto [line, column] = LineColumnAt(EditorText(doc->Editor), SelectionStart(doc->Editor));
+        if (auto error = tools::RunTool(tool, { doc->Path, line, column }, WindowHandle()))
+        {
+            ShowMessageAsync(hstring{ AppName }, hstring{ *error });
+        }
+    }
+
+    void MainWindow::EditTools()
+    {
+        // Opens the tools file in a tab, creating it with examples the first time. Saving it updates the menu.
+        auto path = ToolsFilePath();
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        {
+            auto text = tools::ExampleToolsFile();
+            int size = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+            std::string utf8(static_cast<size_t>(size), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), size, nullptr, nullptr);
+            if (FILE* file = nullptr; _wfopen_s(&file, path.c_str(), L"wb") == 0 && file)
+            {
+                fwrite(utf8.data(), 1, utf8.size(), file);
+                fclose(file);
+            }
+        }
+        OpenFile(path);
     }
 
     void MainWindow::SaveAll()
@@ -3014,7 +3128,7 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::ShowLoadErrors()
     {
-        // Language and theme files together, as only one message can be shown at a time.
+        // Language, theme and tool files together, as only one message can be shown at a time.
         std::wstring message;
         auto list = [&](wchar_t const* heading, std::vector<std::wstring> const& errors)
         {
@@ -3030,9 +3144,10 @@ namespace winrt::RadPad::implementation
         };
         list(L"These language definitions couldn't be loaded:\n", m_languageErrors);
         list(L"These colour themes couldn't be loaded:\n", m_themeErrors);
+        list(L"These tools couldn't be loaded:\n", m_toolErrors);
         if (!message.empty())
         {
-            ShowMessageAsync(L"Language and theme files", hstring{ message });
+            ShowMessageAsync(L"Settings files", hstring{ message });
         }
     }
 

@@ -21,6 +21,7 @@
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
     <ClCompile Include="Themes.cpp" />
+    <ClCompile Include="Tools.cpp" />
     <ClCompile Include="TextFile.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -28,6 +29,7 @@
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Syntax.h" />
     <ClInclude Include="Themes.h" />
+    <ClInclude Include="Tools.h" />
     <ClInclude Include="TextFile.h" />
   </ItemGroup>
   <ItemGroup>

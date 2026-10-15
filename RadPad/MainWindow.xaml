@@ -201,6 +201,9 @@
                     <MenuFlyoutSubItem x:Name="ColorThemeMenu" Text="Color theme" />
                 </MenuBarItem>
 
+                <!-- Items are added in code from the user's tools file (Tools > Edit tools). -->
+                <MenuBarItem x:Name="ToolsMenu" Title="Tools" />
+
                 <MenuBarItem Title="Help">
                     <MenuFlyoutItem Text="About RadPad" Click="About_Click" />
                 </MenuBarItem>

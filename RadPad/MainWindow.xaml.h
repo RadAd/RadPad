@@ -3,6 +3,7 @@
 #include "MainWindow.g.h"
 #include "Syntax.h"
 #include "Themes.h"
+#include "Tools.h"
 #include "TextFile.h"
 
 namespace winrt::RadPad::implementation
@@ -163,6 +164,12 @@ namespace winrt::RadPad::implementation
         void OpenLanguageFolder();
         void ShowLoadErrors();
 
+        // External tools
+        void ReloadTools();
+        void BuildToolsMenu();
+        void RunTool(tools::Tool const& tool);
+        void EditTools();
+
         // Colour themes
         void BuildColorThemeMenu();
         void SetColorTheme(std::wstring const& name);
@@ -254,6 +261,8 @@ namespace winrt::RadPad::implementation
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
         std::vector<std::wstring> m_languageErrors; // from loading the language definitions
         std::vector<std::wstring> m_themeErrors;    // from loading the colour themes
+        std::vector<tools::Tool> m_tools;           // the Tools menu
+        std::vector<std::wstring> m_toolErrors;     // from loading the tools file
         std::wstring m_colorTheme{ themes::DefaultThemeName };
         themes::Palette m_palette;                  // the colour theme's colours for the app's light or dark mode
         std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, int>> m_themeItems; // in the Color theme menu
