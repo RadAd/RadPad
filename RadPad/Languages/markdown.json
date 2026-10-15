@@ -1,0 +1,5 @@
+{
+  "name": "Markdown",
+  "extensions": ["md", "markdown", "mdown", "mkd", "mkdn", "mdwn"],
+  "tokenizer": "markdown"
+}

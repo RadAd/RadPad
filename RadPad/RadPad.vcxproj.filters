@@ -74,6 +74,9 @@
     <None Include="Languages\json.json">
       <Filter>Languages</Filter>
     </None>
+    <None Include="Languages\markdown.json">
+      <Filter>Languages</Filter>
+    </None>
     <None Include="Languages\powershell.json">
       <Filter>Languages</Filter>
     </None>

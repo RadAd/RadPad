@@ -191,6 +191,9 @@
     <None Include="Languages\json.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
+    <None Include="Languages\markdown.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
     <None Include="Languages\powershell.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
