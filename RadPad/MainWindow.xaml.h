@@ -188,7 +188,9 @@ namespace winrt::RadPad::implementation
         fire_and_forget AskToReloadAsync(std::shared_ptr<Document> doc, std::optional<std::pair<uint64_t, uint64_t>> stamp);
         void BuildToolsMenu();
         void AddToolItems(Windows::Foundation::Collections::IVector<Microsoft::UI::Xaml::Controls::MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize);
-        void RunTool(tools::Tool const& tool);
+        fire_and_forget RunToolAsync(tools::Tool tool);
+        Windows::Foundation::IAsyncOperation<bool> AskToolInputsAsync(tools::Tool tool, std::vector<std::wstring> labels, std::shared_ptr<Document> doc,
+                                                                      std::shared_ptr<std::map<std::wstring, std::wstring>> inputs);
         void EditTools();
 
         // Output panel: tools run with their output captured
@@ -298,6 +300,7 @@ namespace winrt::RadPad::implementation
         std::vector<std::wstring> m_themeErrors;    // from loading the colour themes
         std::vector<tools::Tool> m_tools;           // the Tools menu
         std::vector<std::wstring> m_toolErrors;     // from loading the tools file
+        std::map<std::pair<std::wstring, std::wstring>, std::wstring> m_toolInputs; // last text typed for each tool's $(Prompt) labels
         std::shared_ptr<tools::RunningTool> m_runningTool; // the tool running in the output panel, if any
         int m_runId{ 0 };                           // counts runs, so output from an earlier one is ignored
         std::wstring m_runName;                     // the tool last run in the output panel

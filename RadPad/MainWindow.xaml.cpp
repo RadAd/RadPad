@@ -1794,7 +1794,7 @@ namespace winrt::RadPad::implementation
             MenuFlyoutItem item;
             item.Text(tool.Name);
             item.Icon(iconFor(tool));
-            item.Click([this, tool](auto&&, auto&&) { RunTool(tool); });
+            item.Click([this, tool](auto&&, auto&&) { RunToolAsync(tool); });
             items.Append(item);
         }
         if (list.empty())
@@ -1806,32 +1806,112 @@ namespace winrt::RadPad::implementation
         }
     }
 
-    void MainWindow::RunTool(tools::Tool const& tool)
+    fire_and_forget MainWindow::RunToolAsync(tools::Tool tool)
     {
-        // The tool is given the file, so an untitled document has to be saved first, and by default
-        // unsaved changes are saved so the tool sees what's on screen.
+        auto strong = get_strong();
         auto doc = CurrentDocument();
         if (!doc)
         {
-            return;
+            co_return;
         }
+
+        // Text for $(Prompt) placeholders is asked for first, so Cancel leaves everything as it was.
+        auto file = tools::FileContext{};
+        if (auto labels = tools::PromptLabels(tool); !labels.empty())
+        {
+            auto inputs = std::make_shared<std::map<std::wstring, std::wstring>>();
+            if (!co_await AskToolInputsAsync(tool, labels, doc, inputs) || doc != CurrentDocument())
+            {
+                co_return;
+            }
+            file.Inputs = std::move(*inputs);
+        }
+
+        // The tool is given the file, so an untitled document has to be saved first, and by default
+        // unsaved changes are saved so the tool sees what's on screen.
         if (doc->Path.empty() || (tool.SaveFirst && doc->IsDirty))
         {
             if (!SaveDocument(doc, doc->Path.empty()))
             {
-                return;
+                co_return;
             }
         }
 
-        auto [line, column] = LineColumnAt(EditorText(doc->Editor), SelectionStart(doc->Editor));
+        file.Path = doc->Path;
+        std::tie(file.Line, file.Column) = LineColumnAt(EditorText(doc->Editor), SelectionStart(doc->Editor));
         if (tool.CaptureOutput)
         {
-            RunToolInPanelAsync(tool, { doc->Path, line, column });
+            RunToolInPanelAsync(tool, std::move(file));
         }
-        else if (auto error = tools::RunTool(tool, { doc->Path, line, column }, WindowHandle()))
+        else if (auto error = tools::RunTool(tool, file, WindowHandle()))
         {
             ShowMessageAsync(hstring{ AppName }, hstring{ *error });
         }
+    }
+
+    IAsyncOperation<bool> MainWindow::AskToolInputsAsync(tools::Tool tool, std::vector<std::wstring> labels, std::shared_ptr<Document> doc,
+                                                         std::shared_ptr<std::map<std::wstring, std::wstring>> inputs)
+    {
+        // One box per label. Each starts with what was typed for it last time this tool ran, or else
+        // (the first box) the selected text, if it's on one line.
+        auto strong = get_strong();
+        std::wstring selection;
+        if (auto range = doc->Editor.Document().Selection(); range.Length() != 0)
+        {
+            hstring text;
+            range.GetText(TextGetOptions::None, text);
+            if (std::wstring_view{ text }.find(L'\r') == std::wstring_view::npos)
+            {
+                selection = text;
+            }
+        }
+
+        StackPanel panel;
+        panel.Spacing(12);
+        std::vector<TextBox> boxes;
+        for (auto const& label : labels)
+        {
+            TextBox box;
+            box.Header(box_value(label));
+            box.MinWidth(320);
+            box.IsSpellCheckEnabled(false);
+            if (auto last = m_toolInputs.find({ tool.Name, label }); last != m_toolInputs.end())
+            {
+                box.Text(last->second);
+            }
+            else if (boxes.empty())
+            {
+                box.Text(selection);
+            }
+            panel.Children().Append(box);
+            boxes.push_back(box);
+        }
+        boxes.front().Loaded([weakBox = make_weak(boxes.front())](auto&&, auto&&)
+        {
+            if (auto box = weakBox.get())
+            {
+                box.Focus(FocusState::Programmatic);
+                box.SelectAll();
+            }
+        });
+
+        ContentDialog dialog;
+        dialog.Title(box_value(hstring{ tool.Name }));
+        dialog.Content(panel);
+        dialog.PrimaryButtonText(L"Run");
+        dialog.CloseButtonText(L"Cancel");
+        dialog.DefaultButton(ContentDialogButton::Primary);
+        if (co_await ShowDialogAsync(dialog) != ContentDialogResult::Primary)
+        {
+            co_return false;
+        }
+
+        for (size_t i = 0; i < labels.size(); ++i)
+        {
+            (*inputs)[labels[i]] = boxes[i].Text();
+            m_toolInputs[{ tool.Name, labels[i] }] = boxes[i].Text();
+        }
+        co_return true;
     }
 
     // ---------------------------------------------------------------------------------------------

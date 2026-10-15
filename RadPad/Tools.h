@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <map>
 
 // User-defined external tools, listed in the Tools menu and run on the current file.
 namespace tools
@@ -27,7 +28,13 @@ namespace tools
         std::wstring Path;
         int Line{ 1 };
         int Column{ 1 };
+        std::map<std::wstring, std::wstring> Inputs; // text typed for each $(Prompt:label) placeholder, by label
     };
+
+    // The labels of the tool's $(Prompt) and $(Prompt:label) placeholders, each once, in the order they
+    // appear; $(Prompt) has the label DefaultPromptLabel. The text for them is asked for before the tool runs.
+    constexpr wchar_t DefaultPromptLabel[] = L"Text";
+    std::vector<std::wstring> PromptLabels(Tool const& tool);
 
     // Reads the tools from a JSON file; a missing file has none. Errors are added to errors.
     std::vector<Tool> LoadTools(std::wstring const& path, std::vector<std::wstring>& errors);

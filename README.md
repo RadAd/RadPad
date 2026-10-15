@@ -185,7 +185,15 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 | `errorPattern` | Optional, with `"output": "panel"`. A regular expression that finds a file name (group 1), line (group 2) and optionally column (group 3) in a line of output, for tools whose messages the built-in patterns don't recognise. |
 | `outputEncoding` | Optional, with `"output": "panel"`: `"utf-8"`, `"oem"` (the console code page, used by `cmd` and older tools) or `"ansi"`. Without it, output is read as UTF-8 until something that isn't valid UTF-8 appears, then as the console code page. |
 
-`command`, `arguments` and `workingDirectory` can use `$(FilePath)` (the full path), `$(FileDir)` (its folder), `$(FileName)`, `$(FileNameNoExt)`, `$(Line)` and `$(Column)` (the cursor's position). An untitled document is always saved before a tool runs, as there's no file to give it otherwise.
+`command`, `arguments` and `workingDirectory` can use `$(FilePath)` (the full path), `$(FileDir)` (its folder), `$(FileName)`, `$(FileNameNoExt)`, `$(Line)` and `$(Column)` (the cursor's position).
+
+To type something in when the tool runs, use `$(Prompt)`, or `$(Prompt:label)` to choose the box's label. Before the tool starts, RadPad asks for the text in a dialog with one box per label (a label used twice gets the same text both times). Cancel doesn't run the tool. A box starts with what was typed for it last time the tool ran in this session, or otherwise the first box starts with the selected text if it's on one line. The text is put in as typed, so add quotes around the placeholder if it may contain spaces:
+
+```json
+{ "name": "Search in file", "command": "findstr", "arguments": "/n /i \"$(Prompt:Search for)\" \"$(FileName)\" nul", "output": "panel" }
+```
+
+An untitled document is always saved before a tool runs, as there's no file to give it otherwise.
 
 ### Output panel
 A tool with `"output": "panel"` runs through `cmd.exe` with no window and nothing on its input, so it can't wait for typing. Its output appears in a panel above the status bar, errors (what it writes to its error stream) in red, followed by its exit code and how long it took. **View > Output panel** shows or hides the panel, and dragging its top edge or its heading resizes it; both are remembered. While a tool runs, **Stop** ends it and anything it started. Only one tool runs in the panel at a time: starting another asks whether to stop the first.

@@ -154,8 +154,52 @@ namespace tools
             return found;
         }
 
-        // Replaces $(Name) placeholders with details of the file.
-        std::wstring Expand(std::wstring text, FileContext const& file)
+        // Calls found(start, length, label) for each $(Prompt) or $(Prompt:label) placeholder in text.
+        void FindPrompts(std::wstring_view text, std::function<void(size_t, size_t, std::wstring)> const& found)
+        {
+            constexpr std::wstring_view Start = L"$(Prompt";
+            size_t next = 0;
+            for (size_t at = text.find(Start); at != std::wstring_view::npos; at = text.find(Start, next))
+            {
+                size_t after = at + Start.size();
+                next = at + 1;
+                if (after < text.size() && text[after] == L')')
+                {
+                    found(at, after + 1 - at, DefaultPromptLabel);
+                    next = after + 1;
+                }
+                else if (after < text.size() && text[after] == L':')
+                {
+                    if (size_t end = text.find(L')', after); end != std::wstring_view::npos)
+                    {
+                        std::wstring label{ text.substr(after + 1, end - after - 1) };
+                        found(at, end + 1 - at, label.empty() ? DefaultPromptLabel : label);
+                        next = end + 1;
+                    }
+                }
+            }
+        }
+
+        // Replaces $(Name) placeholders with details of the file, and $(Prompt) placeholders with the text typed for them.
+        // Typed text is used as it is: placeholders in it aren't replaced.
+        std::wstring ExpandFilePlaceholders(std::wstring text, FileContext const& file);
+        std::wstring Expand(std::wstring const& text, FileContext const& file)
+        {
+            std::wstring result;
+            size_t done = 0;
+            FindPrompts(text, [&](size_t start, size_t length, std::wstring label)
+            {
+                result += ExpandFilePlaceholders(text.substr(done, start - done), file);
+                if (auto input = file.Inputs.find(label); input != file.Inputs.end())
+                {
+                    result += input->second;
+                }
+                done = start + length;
+            });
+            return result + ExpandFilePlaceholders(text.substr(done), file);
+        }
+
+        std::wstring ExpandFilePlaceholders(std::wstring text, FileContext const& file)
         {
             std::filesystem::path path{ file.Path };
             std::pair<std::wstring_view, std::wstring> values[] = {
@@ -279,6 +323,22 @@ namespace tools
             errors.push_back(path + L": " + std::wstring{ e.message() });
             return {};
         }
+    }
+
+    std::vector<std::wstring> PromptLabels(Tool const& tool)
+    {
+        std::vector<std::wstring> labels;
+        for (auto const* text : { &tool.Command, &tool.Arguments, &tool.WorkingDirectory })
+        {
+            FindPrompts(*text, [&](size_t, size_t, std::wstring label)
+            {
+                if (std::find(labels.begin(), labels.end(), label) == labels.end())
+                {
+                    labels.push_back(std::move(label));
+                }
+            });
+        }
+        return labels;
     }
 
     std::optional<std::wstring> RunTool(Tool const& tool, FileContext const& file, HWND owner)
