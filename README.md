@@ -1,4 +1,4 @@
-# RadPad
+# <img src="docs/icon.png" width="48" height="48" alt=""> RadPad
 
 [![Build](https://img.shields.io/github/actions/workflow/status/RadAd/RadPad/build.yml?branch=master&label=build)](https://github.com/RadAd/RadPad/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/RadAd/RadPad)](https://github.com/RadAd/RadPad/releases/latest)
@@ -77,7 +77,7 @@ The version is set in `RadPad/Version.h`, and only there. It's used for the exe'
 | `Tools.h` / `.cpp` | Loads the user's external tools and runs them on the current file |
 | `App.xaml` / `.cpp` | Application entry point |
 | `RadPad.ico` / `RadPad.rc` | App icon (16–256 px), compiled into the exe and set on the window |
-| `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico` after changing it |
+| `tools/MakeIcon.ps1` | Draws the icon. Run `powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico` after changing it, and copy its 256-pixel preview (`-PreviewDir <folder>`, `icon_256.png`) to `docs/icon.png` for this README |
 | `Version.h` | RadPad's version number, used by the exe's version resource, the About box and the installer |
 | `installer/RadPad.iss` | The Inno Setup installer script, built after a Release build if Inno Setup is installed |
 
