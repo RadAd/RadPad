@@ -7,6 +7,11 @@ namespace instance
     // sends the files to that window, brings it to the front and returns true. The caller should then exit.
     bool ForwardCommandLineToExistingWindow();
 
+    // True when running from an MSIX package (e.g. installed from the Store). Windows then gives the
+    // process the package's app ID and knows how to relaunch it, so RadPad mustn't set its own, and
+    // settings are kept in the package's own data folder.
+    bool IsPackaged();
+
     // Gives the process an explicit app ID, which its windows, taskbar buttons and jump list share.
     // Call before any window is created.
     void SetProcessAppId();

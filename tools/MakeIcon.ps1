@@ -1,7 +1,8 @@
 # Draws the RadPad app icon at each standard Windows size and writes it as a .ico.
 # The design: magenta < - > on a dark rounded square.
 # Usage: powershell -File tools/MakeIcon.ps1 -OutIco RadPad/RadPad.ico [-PreviewDir <folder for PNG previews>]
-param([string]$OutIco, [string]$PreviewDir)
+#        powershell -File tools/MakeIcon.ps1 -AssetDir <folder>   (the MSIX package logos; see MakeMsix.ps1)
+param([string]$OutIco, [string]$PreviewDir, [string]$AssetDir)
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing @'
@@ -47,6 +48,16 @@ public static class IconArt {
     }
 }
 '@
+if ($AssetDir) {
+    # The logos named in installer\msix\AppxManifest.xml, at their 100% scale sizes.
+    $logos = @{ "Square44x44Logo.png" = 44; "Square150x150Logo.png" = 150; "StoreLogo.png" = 50 }
+    foreach ($name in $logos.Keys) {
+        $path = Join-Path $AssetDir $name
+        [IconArt]::Draw($logos[$name]).Save($path, [Drawing.Imaging.ImageFormat]::Png)
+        "wrote $path"
+    }
+}
+if (-not $OutIco) { return }
 $sizes = 16, 20, 24, 32, 40, 48, 64, 256
 $pngs = foreach ($size in $sizes) {
     $bmp = [IconArt]::Draw($size); $ms = New-Object IO.MemoryStream; $bmp.Save($ms, [Drawing.Imaging.ImageFormat]::Png)

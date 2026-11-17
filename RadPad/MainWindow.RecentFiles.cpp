@@ -39,12 +39,15 @@ namespace winrt::RadPad::implementation
             // Files the user removed from the jump list can't be added back, so drop them from ours too.
             DropRemovedJumpListFiles(removed.get());
 
+            // When installed from the Store, the shortcuts use the package's "radpad" command, as starting
+            // the exe itself would run it without the package's identity (and so its settings).
             auto exe = ExePath();
+            auto target = instance::IsPackaged() ? ExecutionAliasPath() : exe;
             auto items = create_instance<IObjectCollection>(CLSID_EnumerableObjectCollection);
             for (auto const& path : m_recentFiles)
             {
                 auto link = create_instance<IShellLinkW>(CLSID_ShellLink);
-                check_hresult(link->SetPath(exe.c_str()));
+                check_hresult(link->SetPath(target.c_str()));
                 check_hresult(link->SetArguments((L"\"" + path + L"\"").c_str()));
                 check_hresult(link->SetIconLocation(exe.c_str(), 0));
                 link->SetDescription(path.c_str()); // the tooltip; fails harmlessly for very long paths

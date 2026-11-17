@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Instance.h"
+#include <appmodel.h>
 
 using namespace winrt;
 
@@ -121,6 +122,12 @@ namespace
 
 namespace instance
 {
+    bool IsPackaged()
+    {
+        UINT32 length = 0;
+        return GetCurrentPackageFullName(&length, nullptr) != APPMODEL_ERROR_NO_PACKAGE;
+    }
+
     bool ForwardCommandLineToExistingWindow()
     {
         auto files = CommandLineFiles();
@@ -156,11 +163,18 @@ namespace instance
 
     void SetProcessAppId()
     {
-        SetCurrentProcessExplicitAppUserModelID(AppId);
+        if (!IsPackaged())
+        {
+            SetCurrentProcessExplicitAppUserModelID(AppId);
+        }
     }
 
     void SetTaskbarRelaunch(HWND hwnd)
     {
+        if (IsPackaged())
+        {
+            return;
+        }
         std::wstring exe(32768, L'\0');
         exe.resize(GetModuleFileNameW(nullptr, exe.data(), static_cast<DWORD>(exe.size())));
         try

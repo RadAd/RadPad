@@ -490,9 +490,22 @@ namespace mainwindow
         return line <= 1 ? 0 : static_cast<int>(text.size());
     }
 
-    // %LOCALAPPDATA%\RadPad, where settings and the user's language definitions are kept.
+    // %LOCALAPPDATA%\RadPad, where settings and the user's language definitions are kept. When installed
+    // from the Store, the package's own LocalState folder instead (%LOCALAPPDATA%\Packages\<package>\LocalState),
+    // which Windows deletes on uninstall; writes to %LOCALAPPDATA% itself would be silently redirected.
     inline std::wstring AppDataFolder()
     {
+        if (instance::IsPackaged())
+        {
+            try
+            {
+                return std::wstring(winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path());
+            }
+            catch (winrt::hresult_error const&)
+            {
+                return {};
+            }
+        }
         PWSTR folder = nullptr;
         if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &folder)))
         {
@@ -585,6 +598,20 @@ namespace mainwindow
         }
         exe.resize(length);
         return exe;
+    }
+
+    // %LOCALAPPDATA%\Microsoft\WindowsApps\radpad.exe: the command the MSIX package declares (see
+    // installer\msix\AppxManifest.xml), which starts RadPad with the package's identity.
+    inline std::wstring ExecutionAliasPath()
+    {
+        PWSTR folder = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &folder)))
+        {
+            return {};
+        }
+        std::wstring path = std::wstring(folder) + L"\\Microsoft\\WindowsApps\\radpad.exe";
+        CoTaskMemFree(folder);
+        return path;
     }
 
     inline std::vector<std::wstring> LanguageFolders()

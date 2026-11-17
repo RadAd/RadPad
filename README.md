@@ -25,7 +25,10 @@ Build options:
 
 - `/p:CreateZipPackage=false` skips the zip, and `/p:CreateZipPackage=true` makes one from another configuration.
 - `/p:CreateInstaller=false` skips the installer, and `/p:InnoSetupCompiler=<path to ISCC.exe>` uses an Inno Setup installed somewhere unusual.
-- The steps are the `CopyVCRuntime`, `CreateZipPackage` and `CreateInstaller` targets at the end of `RadPad.vcxproj`.
+- `/p:CreateMsix=false` skips the MSIX.
+- The steps are the `CopyVCRuntime`, `CreateZipPackage`, `CreateInstaller` and `CreateMsix` targets at the end of `RadPad.vcxproj`.
+
+For the Microsoft Store, a Release build also packages the app as `dist\RadPad-<platform>.msix`, using `tools\MakeMsix.ps1` and the manifest in `installer\msix\AppxManifest.xml`. It needs the identity values from the app's Product identity page in Partner Center, set as `MsixIdentityName`, `MsixPublisher` (`CN=...`) and `MsixPublisherDisplayName` in `RadPad.vcxproj` or passed with `/p:`; until then no MSIX is built. The script can also be run by hand after a Release build: `powershell -File tools\MakeMsix.ps1 -IdentityName <name> -Publisher "CN=..." -PublisherDisplayName <name> [-Platform x64]`. The Store signs the package, so it needn't be signed. When installed from the Store, RadPad keeps its settings in its package's data folder (`%LOCALAPPDATA%\Packages\<package>\LocalState`) rather than `%LOCALAPPDATA%\RadPad`, and Windows removes them on uninstall. The package turns off Windows' redirection of writes to AppData, so files RadPad creates there (other programs' configuration, say) go to the real location; this uses the restricted `unvirtualizedResources` capability, which Partner Center asks you to justify when submitting.
 
 The version is set in `RadPad/Version.h`, and only there. It's used for the exe's version (shown in Explorer under Properties > Details), the About box and the installer.
 

@@ -333,6 +333,27 @@
           Command="&quot;$(InnoSetupCompiler)&quot; /Q /DAppVersion=$(RadPadVersion) /DPlatform=$(Platform) &quot;/DSourceDir=$([System.IO.Path]::GetFullPath('$(OutDir)').TrimEnd('\'))&quot; &quot;/DOutputDir=$([System.IO.Path]::GetFullPath('$(ZipPackageDir)').TrimEnd('\'))&quot; &quot;$(MSBuildProjectDirectory)\..\installer\RadPad.iss&quot;" />
     <Message Importance="high" Condition="'$(InnoSetupCompiler)' != ''" Text="$(ProjectName) -> $([System.IO.Path]::GetFullPath('$(ZipPackageDir)'))$(ProjectName)-$(Platform)-setup.exe" />
   </Target>
+  <!--
+    After a Release build, also package the app for the Microsoft Store as dist\RadPad-<platform>.msix, with
+    tools\MakeMsix.ps1 and installer\msix\AppxManifest.xml. The identity values are on the app's Product
+    identity page in Partner Center; until they're set here (or passed with /p:), no MSIX is built.
+    Set CreateMsix=false to skip this step.
+  -->
+  <PropertyGroup>
+    <CreateMsix Condition="'$(CreateMsix)' == '' and '$(Configuration)' == 'Release'">true</CreateMsix>
+    <!-- Package/Identity/Name, Package/Identity/Publisher ("CN=...") and Package/Properties/PublisherDisplayName. -->
+    <MsixIdentityName>RadSoft.RadPad</MsixIdentityName>
+    <MsixPublisher>CN=A5268441-4C12-497C-A01D-9A89F798E7F0</MsixPublisher>
+    <MsixPublisherDisplayName>RadSoft</MsixPublisherDisplayName>
+  </PropertyGroup>
+  <Target Name="CreateMsix" AfterTargets="CreateInstaller" Condition="'$(CreateMsix)' == 'true'">
+    <PropertyGroup>
+      <_MsixIdentitySet Condition="'$(MsixIdentityName)' != '' and '$(MsixPublisher)' != '' and '$(MsixPublisherDisplayName)' != ''">true</_MsixIdentitySet>
+    </PropertyGroup>
+    <Message Importance="high" Condition="'$(_MsixIdentitySet)' != 'true'" Text="$(ProjectName): the Store identity (MsixIdentityName, MsixPublisher, MsixPublisherDisplayName) isn't set, so no MSIX was built." />
+    <Exec Condition="'$(_MsixIdentitySet)' == 'true'"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\tools\MakeMsix.ps1&quot; -Platform $(Platform) -SourceDir &quot;$([System.IO.Path]::GetFullPath('$(OutDir)').TrimEnd('\'))&quot; -IdentityName &quot;$(MsixIdentityName)&quot; -Publisher &quot;$(MsixPublisher)&quot; -PublisherDisplayName &quot;$(MsixPublisherDisplayName)&quot;" />
+  </Target>
 
   <Target Name="RemoveDuplicateAutoInitializer" AfterTargets="WindowsAppRuntimeAutoInitializer">
     <ItemGroup>
