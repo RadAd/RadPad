@@ -72,14 +72,15 @@ Root: HKA; Subkey: "Software\Classes\RadPad.Document\shell\open\command"; ValueT
 Root: HKA; Subkey: "Software\Classes\Applications\RadPad.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "RadPad"; Flags: uninsdeletekey; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\RadPad.exe\shell\open\command"; ValueType: string; ValueData: """{app}\RadPad.exe"" ""%1"""; Tasks: openwith
 #define Extensions "txt log md markdown text bat c c++ cc cfg cjs cmd conf config cpp cs csproj css csx cts cxx editorconfig filters gitconfig go h hh hpp htm html hxx idl inf ini inl ipp ixx java js json jsonc jsx less manifest mjs mts nuspec plist properties props ps1 psd1 psm1 py pyi pyw rc rc2 reg resx rs scss sql svg targets ts tsx vbproj vcxproj webmanifest xaml xhtml xml xsd xsl xslt"
-#define Rest Extensions + " "
+; One pair of entries per extension. Rest (the extensions not done yet) is advanced in the #for itself, as a
+; #define inside the #sub would make a new variable there and leave the loop's unchanged.
+#define Rest
 #sub AddExtension
   #define Ext Copy(Rest, 1, Pos(" ", Rest) - 1)
-  #define Rest Copy(Rest, Pos(" ", Rest) + 1)
 Root: HKA; Subkey: "Software\Classes\.{#Ext}\OpenWithProgids"; ValueType: string; ValueName: "RadPad.Document"; ValueData: ""; Flags: uninsdeletevalue; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\RadPad.exe\SupportedTypes"; ValueType: string; ValueName: ".{#Ext}"; ValueData: ""; Tasks: openwith
 #endsub
-#for {0; Len(Rest) > 0; 0} AddExtension
+#for {Rest = Extensions + " "; Len(Rest) > 0; Rest = Copy(Rest, Pos(" ", Rest) + 1, Len(Rest))} AddExtension
 ; "Edit with RadPad" for any file. On Windows 11 it's under "Show more options".
 Root: HKA; Subkey: "Software\Classes\*\shell\RadPad"; ValueType: string; ValueData: "Edit with RadPad"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKA; Subkey: "Software\Classes\*\shell\RadPad"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\RadPad.exe,0"; Tasks: contextmenu
