@@ -140,6 +140,14 @@ namespace winrt::RadPad::implementation
                 e.Handled(true);
                 return;
             }
+            // Enter starts the new line with the current line's indentation. Shift+Enter too, which would
+            // otherwise insert a line break that isn't a new line.
+            if (key == VK_RETURN && !ctrl && !alt && d && !d->Editor.IsReadOnly())
+            {
+                InsertNewLine(d->Editor);
+                e.Handled(true);
+                return;
+            }
             // Home goes to the first non-whitespace character of the line, or to the start if already there.
             if (key == VK_HOME && !ctrl && !alt && d && SmartHome(d->Editor, shift))
             {

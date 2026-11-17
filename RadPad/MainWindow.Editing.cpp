@@ -171,6 +171,32 @@ namespace winrt::RadPad::implementation
         InsertText(editor, std::wstring(static_cast<size_t>(m_indentSize - column % m_indentSize), L' '));
     }
 
+    void MainWindow::InsertNewLine(RichEditBox const& editor)
+    {
+        // The new line gets the current line's leading spaces and tabs (only those before the caret, if
+        // it's within them). On a line that's only indentation, the indentation moves to the new line,
+        // so the line left behind is empty rather than trailing whitespace.
+        auto text = EditorText(editor);
+        auto isSpace = [](wchar_t c) { return c == L' ' || c == L'\t'; };
+        size_t start = std::min(static_cast<size_t>(std::max(SelectionStart(editor), 0)), text.size());
+        size_t end = std::min(start + static_cast<size_t>(std::max(SelectionLength(editor), 0)), text.size());
+        size_t lineStart = start == 0 ? std::wstring::npos : text.find_last_of(L'\r', start - 1);
+        lineStart = lineStart == std::wstring::npos ? 0 : lineStart + 1;
+        size_t indentEnd = lineStart;
+        while (indentEnd < start && isSpace(text[indentEnd]))
+        {
+            ++indentEnd;
+        }
+        std::wstring indent = text.substr(lineStart, indentEnd - lineStart);
+
+        size_t lineEnd = std::min(text.find(L'\r', end), text.size());
+        if (indentEnd == start && std::all_of(text.begin() + end, text.begin() + lineEnd, isSpace))
+        {
+            Select(editor, static_cast<int>(lineStart), static_cast<int>(lineEnd - lineStart));
+        }
+        InsertText(editor, L"\r" + indent);
+    }
+
     bool MainWindow::SmartHome(RichEditBox const& editor, bool extend)
     {
         // Moves the caret (the selection's active end) to the first non-whitespace character of its line,

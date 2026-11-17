@@ -243,6 +243,7 @@ namespace winrt::RadPad::implementation
         // Tabs and indentation
         void UpdateFontMetrics();
         void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        void InsertNewLine(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
         bool SmartHome(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, bool extend);
         void JumpToMatchingBracket(std::shared_ptr<Document> const& doc, bool select);
         bool SelectionSpansLines(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
