@@ -99,8 +99,17 @@ namespace winrt::RadPad::implementation
             co_return;
         }
 
-        // Text for $(Prompt) placeholders is asked for first, so Cancel leaves everything as it was.
+        // Line breaks in the selection become spaces, as a command line can't hold them.
         auto file = tools::FileContext{};
+        file.SelectedText = SelectedText(doc->Editor);
+        std::replace(file.SelectedText.begin(), file.SelectedText.end(), L'\r', L' ');
+        if (tools::UsesSelection(tool) && file.SelectedText.find_first_not_of(L" \t") == std::wstring::npos)
+        {
+            StatusMessageText().Text(std::format(L"Select some text for \"{}\" first", tool.Name));
+            co_return;
+        }
+
+        // Text for $(Prompt) placeholders is asked for first, so Cancel leaves everything as it was.
         if (auto labels = tools::PromptLabels(tool); !labels.empty())
         {
             auto inputs = std::make_shared<std::map<std::wstring, std::wstring>>();
@@ -111,9 +120,11 @@ namespace winrt::RadPad::implementation
             file.Inputs = std::move(*inputs);
         }
 
-        // The tool is given the file, so an untitled document has to be saved first, and by default
+        // A tool given the file, or one that saves first and so works on files in its folder, needs an
+        // untitled document saved first; one that doesn't (a web search, say) runs without. By default
         // unsaved changes are saved so the tool sees what's on screen.
-        if (doc->Path.empty() || (tool.SaveFirst && doc->IsDirty))
+        bool needsFile = tools::UsesFile(tool) || tool.SaveFirst;
+        if ((doc->Path.empty() && needsFile) || (!doc->Path.empty() && tool.SaveFirst && doc->IsDirty))
         {
             if (!SaveDocument(doc, doc->Path.empty()))
             {

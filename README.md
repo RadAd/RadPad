@@ -166,7 +166,7 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property`, `macro` and `bracket1` to `bracket3` (the rainbow bracket colours); any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour, and the bracket colours, which use VS Code's. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
 
 ## External tools
-The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with two examples the first time. Saving it updates the menu straight away, and mistakes are reported in a message.
+The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with a few examples the first time (Show in Explorer, Command prompt here and Search Google). Saving it updates the menu straight away, and mistakes are reported in a message.
 
 ```json
 {
@@ -198,13 +198,19 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 
 `command`, `arguments` and `workingDirectory` can use `$(FilePath)` (the full path), `$(FileDir)` (its folder), `$(FileName)`, `$(FileNameNoExt)`, `$(Line)` and `$(Column)` (the cursor's position).
 
+`$(SelectedText)` is the selected text, with line breaks turned into spaces, and `$(SelectedTextUrl)` is the same text encoded for a web address. A tool using either does nothing but say so in the status bar when no text is selected. A `command` can be a web address, which opens in the default browser:
+
+```json
+{ "name": "Search Google", "glyph": "E721", "command": "https://www.google.com/search?q=$(SelectedTextUrl)", "arguments": "", "saveFirst": false }
+```
+
 To type something in when the tool runs, use `$(Prompt)`, or `$(Prompt:label)` to choose the box's label. Before the tool starts, RadPad asks for the text in a dialog with one box per label (a label used twice gets the same text both times). Cancel doesn't run the tool. A box starts with what was typed for it last time the tool ran in this session, or otherwise the first box starts with the selected text if it's on one line. The text is put in as typed, so add quotes around the placeholder if it may contain spaces:
 
 ```json
 { "name": "Search in file", "command": "findstr", "arguments": "/n /i \"$(Prompt:Search for)\" \"$(FileName)\" nul", "output": "panel" }
 ```
 
-An untitled document is always saved before a tool runs, as there's no file to give it otherwise.
+An untitled document is saved before a tool runs if the tool uses a `$(File…)` placeholder (as it does without `arguments`) or has `saveFirst` on, as there's no file to give it otherwise. Other tools, such as Search Google, run without saving it.
 
 ### Output panel
 A tool with `"output": "panel"` runs through `cmd.exe` with no window and nothing on its input, so it can't wait for typing. Its output appears in a panel above the status bar, errors (what it writes to its error stream) in red, followed by its exit code and how long it took. **View > Output panel** shows or hides the panel, and dragging its top edge or its heading resizes it; both are remembered. While a tool runs, **Stop** ends it and anything it started. Only one tool runs in the panel at a time: starting another asks whether to stop the first.

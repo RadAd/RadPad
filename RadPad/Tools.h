@@ -28,8 +28,16 @@ namespace tools
         std::wstring Path;
         int Line{ 1 };
         int Column{ 1 };
+        std::wstring SelectedText; // the editor's selection, for $(SelectedText) and $(SelectedTextUrl)
         std::map<std::wstring, std::wstring> Inputs; // text typed for each $(Prompt:label) placeholder, by label
     };
+
+    // Whether the tool is given the file, through a $(File...) placeholder (as its default arguments are).
+    // Otherwise it can run on an untitled document without saving it first.
+    bool UsesFile(Tool const& tool);
+
+    // Whether the tool uses the selected text, so needs some selected.
+    bool UsesSelection(Tool const& tool);
 
     // The labels of the tool's $(Prompt) and $(Prompt:label) placeholders, each once, in the order they
     // appear; $(Prompt) has the label DefaultPromptLabel. The text for them is asked for before the tool runs.

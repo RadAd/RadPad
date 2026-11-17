@@ -199,9 +199,42 @@ namespace tools
             return result + ExpandFilePlaceholders(text.substr(done), file);
         }
 
+        // Text for a URL's query: UTF-8, with everything but letters, digits and -_.~ written as %XX.
+        std::wstring UrlEncode(std::wstring_view text)
+        {
+            std::string utf8(static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr)), '\0');
+            WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), static_cast<int>(utf8.size()), nullptr, nullptr);
+            std::wstring result;
+            for (unsigned char c : utf8)
+            {
+                if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+                {
+                    result += static_cast<wchar_t>(c);
+                }
+                else
+                {
+                    result += std::format(L"%{:02X}", c);
+                }
+            }
+            return result;
+        }
+
+        bool UsesPlaceholder(Tool const& tool, std::wstring_view prefix)
+        {
+            for (auto const* text : { &tool.Command, &tool.Arguments, &tool.WorkingDirectory })
+            {
+                if (text->find(prefix) != std::wstring::npos)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         std::wstring ExpandFilePlaceholders(std::wstring text, FileContext const& file)
         {
             std::filesystem::path path{ file.Path };
+            // The selection last, so placeholders in the selected text aren't replaced.
             std::pair<std::wstring_view, std::wstring> values[] = {
                 { L"$(FilePath)", path.wstring() },
                 { L"$(FileDir)", path.parent_path().wstring() },
@@ -209,6 +242,8 @@ namespace tools
                 { L"$(FileNameNoExt)", path.stem().wstring() },
                 { L"$(Line)", std::to_wstring(file.Line) },
                 { L"$(Column)", std::to_wstring(file.Column) },
+                { L"$(SelectedTextUrl)", UrlEncode(file.SelectedText) },
+                { L"$(SelectedText)", file.SelectedText },
             };
             for (auto const& [name, value] : values)
             {
@@ -323,6 +358,16 @@ namespace tools
             errors.push_back(path + L": " + std::wstring{ e.message() });
             return {};
         }
+    }
+
+    bool UsesFile(Tool const& tool)
+    {
+        return UsesPlaceholder(tool, L"$(File");
+    }
+
+    bool UsesSelection(Tool const& tool)
+    {
+        return UsesPlaceholder(tool, L"$(SelectedText");
     }
 
     std::vector<std::wstring> PromptLabels(Tool const& tool)
@@ -714,7 +759,7 @@ namespace tools
 
     std::wstring ExampleToolsFile()
     {
-        return LR"({
+        return LR"json({
   "tools": [
     {
       "name": "Show in Explorer",
@@ -727,9 +772,16 @@ namespace tools
       "command": "cmd.exe",
       "arguments": "",
       "saveFirst": false
+    },
+    {
+      "name": "Search Google",
+      "glyph": "E721",
+      "command": "https://www.google.com/search?q=$(SelectedTextUrl)",
+      "arguments": "",
+      "saveFirst": false
     }
   ]
 }
-)";
+)json";
     }
 }
