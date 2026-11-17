@@ -1,0 +1,39 @@
+# Builds Release x64 and ARM64 on every push and pull request, and keeps what the build puts in dist
+# (the zip, the installer and the MSIX for the Store) as artifacts of the run.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore RadPad.sln
+
+      # The build makes an installer only if Inno Setup is installed.
+      - name: Install Inno Setup
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build
+        run: msbuild RadPad.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /m /v:minimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadPad-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error

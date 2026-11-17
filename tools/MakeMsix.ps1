@@ -46,6 +46,9 @@ New-Item -ItemType Directory $stage | Out-Null
 robocopy $SourceDir $stage /E /XF *.pdb *.lib *.exp RadPad.winmd *.ico /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Copying $SourceDir failed (robocopy exit code $LASTEXITCODE)." }
 New-Item -ItemType Directory "$stage\Assets" | Out-Null
+# MakeIcon.ps1 compiles C# with Add-Type, which fails on folders in LIB that don't exist, as MSBuild's LIB
+# for some platforms has (ARM64's atlmfc, say). It needs no libraries, so don't pass LIB on.
+$env:LIB = $null
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "MakeIcon.ps1") -AssetDir "$stage\Assets" | Out-Null
 if ($LASTEXITCODE) { throw "MakeIcon.ps1 failed." }
 

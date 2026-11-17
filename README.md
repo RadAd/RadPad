@@ -13,6 +13,8 @@ The app is **unpackaged and self-contained**: the Windows App SDK runtime ships 
 ## Packaging
 Every **Release** build also creates `dist\RadPad-<platform>.zip` (e.g. `dist\RadPad-x64.zip`). It contains a `RadPad` folder with everything needed to run the app, including the Visual C++ runtime DLLs it uses, so it runs on any Windows 10 or 11 PC without installing anything else. Debug symbols and other build by-products are left out. Unzip it anywhere and run `RadPad.exe`.
 
+GitHub builds Release x64 and ARM64 on every push and pull request (`.github/workflows/build.yml`). Each run's page has the contents of `dist` (zip, installer and MSIX) for each platform as artifacts.
+
 If [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed, a Release build also creates an installer, `dist\RadPad-<platform>-setup.exe`, from `installer\RadPad.iss`. It:
 
 - installs for the current user without administrator rights, into `%LOCALAPPDATA%\Programs\RadPad` (or for all users, if chosen);
