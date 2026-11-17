@@ -75,8 +75,20 @@ namespace
 
     std::function<void(std::vector<std::wstring>)> g_openFiles;
 
+    // Asks a RadPad window to move to the top (see instance::RaiseWindow).
+    UINT RaiseMessage()
+    {
+        static UINT message = RegisterWindowMessageW(L"RadPad.Raise");
+        return message;
+    }
+
     LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR)
     {
+        if (message == RaiseMessage() && message != 0)
+        {
+            SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            return 0;
+        }
         if (message == WM_NCDESTROY)
         {
             RemovePropW(hwnd, WindowProperty);
@@ -216,6 +228,32 @@ namespace instance
         {
             // The taskbar falls back to its own guess.
         }
+    }
+
+    HWND FindProcessWindow(DWORD processId)
+    {
+        std::pair<DWORD, HWND> search{ processId, nullptr };
+        if (processId != 0)
+        {
+            EnumWindows([](HWND hwnd, LPARAM param)
+            {
+                auto& [id, found] = *reinterpret_cast<std::pair<DWORD, HWND>*>(param);
+                DWORD windowProcess = 0;
+                GetWindowThreadProcessId(hwnd, &windowProcess);
+                if (windowProcess == id && GetPropW(hwnd, WindowProperty) && IsWindowVisible(hwnd))
+                {
+                    found = hwnd;
+                    return FALSE;
+                }
+                return TRUE;
+            }, reinterpret_cast<LPARAM>(&search));
+        }
+        return search.second;
+    }
+
+    void RaiseWindow(HWND hwnd)
+    {
+        PostMessageW(hwnd, RaiseMessage(), 0, 0);
     }
 
     void AcceptForwardedFiles(HWND hwnd, std::function<void(std::vector<std::wstring>)> openFiles)

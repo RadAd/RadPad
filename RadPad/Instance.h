@@ -36,6 +36,13 @@ namespace instance
     // out what to start for an unpackaged WinUI app, and does nothing.
     void SetTaskbarRelaunch(HWND hwnd);
 
+    // The RadPad window of the process with that ID, or null if it has none (yet).
+    HWND FindProcessWindow(DWORD processId);
+
+    // Asks the RadPad window hwnd, perhaps in another process, to move itself to the top. When it's the
+    // active window, it can do that where another process can't.
+    void RaiseWindow(HWND hwnd);
+
     // Marks hwnd as a RadPad window that accepts files from ForwardCommandLineToExistingWindow.
     // openFiles is called on the window's thread with full paths (or URLs).
     void AcceptForwardedFiles(HWND hwnd, std::function<void(std::vector<std::wstring>)> openFiles);

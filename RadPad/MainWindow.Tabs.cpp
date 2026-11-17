@@ -446,6 +446,8 @@ namespace winrt::RadPad::implementation
         {
             AppWindow().MoveAndResize({ window.left, window.top, window.right - window.left, window.bottom - window.top });
         }
+        // In front of the window it was dragged from, which allowed this (see MoveTabToNewProcessAsync).
+        SetForegroundWindow(WindowHandle());
     }
 
     void MainWindow::Tabs_TabDragStarting(TabView const&, TabViewTabDragStartingEventArgs const& e)
@@ -626,11 +628,16 @@ namespace winrt::RadPad::implementation
         std::wstring exe = instance::IsPackaged() ? ExecutionAliasPath() : ExePath();
         std::wstring parameters = std::wstring(instance::TabArgument) + L" \"" + file + L"\"";
         SHELLEXECUTEINFOW info{ sizeof(info) };
-        info.fMask = SEE_MASK_NOASYNC;
+        info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
         info.lpFile = exe.c_str();
         info.lpParameters = parameters.c_str();
         info.nShow = SW_SHOWNORMAL;
+        // Windows only lets a process come to the front if the one in front allows it. Any process, as
+        // when installed from the Store the new one is started through the "radpad" alias.
+        AllowSetForegroundWindow(ASFW_ANY);
         bool started = ShellExecuteExW(&info);
+        handle process{ started ? info.hProcess : nullptr };
+        DWORD processId = process ? GetProcessId(process.get()) : 0;
 
         bool taken = false;
         for (int i = 0; started && i < 300 && !taken; ++i) // up to 30 seconds
@@ -645,6 +652,16 @@ namespace winrt::RadPad::implementation
         if (taken)
         {
             RemoveDocument(doc);
+            // Removing the tab focuses another, which raises this window above the new one, though the new
+            // one stays active. This window can't then go behind it, but the new one, being active, can
+            // move itself to the top, so once that's done ask it to.
+            DispatcherQueue().TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [processId]
+            {
+                if (HWND window = instance::FindProcessWindow(processId))
+                {
+                    instance::RaiseWindow(window);
+                }
+            });
         }
         else
         {
