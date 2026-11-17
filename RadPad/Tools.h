@@ -33,16 +33,30 @@ namespace tools
     };
 
     // Whether the tool is given the file, through a $(File...) placeholder (as its default arguments are).
-    // Otherwise it can run on an untitled document without saving it first.
+    // Otherwise it can run on an untitled document without saving it first. Prompt defaults don't count.
     bool UsesFile(Tool const& tool);
 
-    // Whether the tool uses the selected text, so needs some selected.
+    // Whether the tool uses the selected text, so needs some selected. Prompt defaults don't count: a
+    // prompt whose default is the selection just starts empty without one.
     bool UsesSelection(Tool const& tool);
 
-    // The labels of the tool's $(Prompt) and $(Prompt:label) placeholders, each once, in the order they
-    // appear; $(Prompt) has the label DefaultPromptLabel. The text for them is asked for before the tool runs.
+    // A $(Prompt) placeholder: $(Prompt), $(Prompt:label), $(Prompt=default) or $(Prompt:label=default).
+    // The default can use the other placeholders, such as $(SelectedText); see ExpandPlaceholders.
+    struct Prompt
+    {
+        std::wstring Label; // DefaultPromptLabel for $(Prompt) and $(Prompt=default)
+        std::wstring Default;
+        bool HasDefault{ false };
+    };
     constexpr wchar_t DefaultPromptLabel[] = L"Text";
-    std::vector<std::wstring> PromptLabels(Tool const& tool);
+
+    // The tool's prompts, one per label, in the order they first appear. A label used more than once takes
+    // the first default given for it. The text for them is asked for before the tool runs.
+    std::vector<Prompt> Prompts(Tool const& tool);
+
+    // Replaces the $(File...), $(Line), $(Column) and $(SelectedText...) placeholders in text, as for a
+    // prompt's default.
+    std::wstring ExpandPlaceholders(std::wstring const& text, FileContext const& file);
 
     // Reads the tools from a JSON file; a missing file has none. Errors are added to errors.
     std::vector<Tool> LoadTools(std::wstring const& path, std::vector<std::wstring>& errors);

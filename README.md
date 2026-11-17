@@ -206,10 +206,16 @@ The **Tools** menu runs other programs on the current file. They're listed in `%
 { "name": "Search Google", "glyph": "E721", "command": "https://www.google.com/search?q=$(SelectedTextUrl)", "arguments": "", "saveFirst": false }
 ```
 
-To type something in when the tool runs, use `$(Prompt)`, or `$(Prompt:label)` to choose the box's label. Before the tool starts, RadPad asks for the text in a dialog with one box per label (a label used twice gets the same text both times). Cancel doesn't run the tool. A box starts with what was typed for it last time the tool ran in this session, or otherwise the first box starts with the selected text if it's on one line. The text is put in as typed, so add quotes around the placeholder if it may contain spaces:
+To type something in when the tool runs, use `$(Prompt)`, or `$(Prompt:label)` to choose the box's label. Before the tool starts, RadPad asks for the text in a dialog with one box per label (a label used twice gets the same text both times). Cancel doesn't run the tool. A box starts with what was typed for it last time the tool ran in this session, or empty; to start it with the selected text, give it a default (below). The text is put in as typed, so add quotes around the placeholder if it may contain spaces:
 
 ```json
 { "name": "Search in file", "command": "findstr", "arguments": "/n /i \"$(Prompt:Search for)\" \"$(FileName)\" nul", "output": "panel" }
+```
+
+To start a box with a value of your own, add it after `=`: `$(Prompt:label=default)`, or `$(Prompt=default)` without a label. The default can use the other placeholders, so `$(Prompt:Search for=$(SelectedText))` starts with the selected text each time. A box with a default starts with it rather than what was typed last time, unless the default comes out empty (with nothing selected, say). A prompt whose default is the selection doesn't need text to be selected for the tool to run:
+
+```json
+{ "name": "Search in file", "command": "findstr", "arguments": "/n /i \"$(Prompt:Search for=$(SelectedText))\" \"$(FileName)\" nul", "output": "panel" }
 ```
 
 An untitled document is saved before a tool runs if the tool uses a `$(File…)` placeholder (as it does without `arguments`) or has `saveFirst` on, as there's no file to give it otherwise. Other tools, such as Search Google, run without saving it.

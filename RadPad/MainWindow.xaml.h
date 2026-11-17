@@ -214,7 +214,7 @@ namespace winrt::RadPad::implementation
         void BuildToolsMenu();
         void AddToolItems(Windows::Foundation::Collections::IVector<Microsoft::UI::Xaml::Controls::MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize);
         fire_and_forget RunToolAsync(tools::Tool tool);
-        Windows::Foundation::IAsyncOperation<bool> AskToolInputsAsync(tools::Tool tool, std::vector<std::wstring> labels, std::shared_ptr<Document> doc,
+        Windows::Foundation::IAsyncOperation<bool> AskToolInputsAsync(tools::Tool tool, std::vector<tools::Prompt> prompts, tools::FileContext file,
                                                                       std::shared_ptr<std::map<std::wstring, std::wstring>> inputs);
         void EditTools();
 

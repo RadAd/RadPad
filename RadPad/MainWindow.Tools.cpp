@@ -109,11 +109,14 @@ namespace winrt::RadPad::implementation
             co_return;
         }
 
-        // Text for $(Prompt) placeholders is asked for first, so Cancel leaves everything as it was.
-        if (auto labels = tools::PromptLabels(tool); !labels.empty())
+        // Text for $(Prompt) placeholders is asked for first, so Cancel leaves everything as it was. Their
+        // defaults can use the file and selection.
+        file.Path = doc->Path;
+        std::tie(file.Line, file.Column) = LineColumnAt(EditorText(doc->Editor), SelectionStart(doc->Editor));
+        if (auto prompts = tools::Prompts(tool); !prompts.empty())
         {
             auto inputs = std::make_shared<std::map<std::wstring, std::wstring>>();
-            if (!co_await AskToolInputsAsync(tool, labels, doc, inputs) || doc != CurrentDocument())
+            if (!co_await AskToolInputsAsync(tool, prompts, file, inputs) || doc != CurrentDocument())
             {
                 co_return;
             }
@@ -144,39 +147,30 @@ namespace winrt::RadPad::implementation
         }
     }
 
-    IAsyncOperation<bool> MainWindow::AskToolInputsAsync(tools::Tool tool, std::vector<std::wstring> labels, std::shared_ptr<Document> doc,
+    IAsyncOperation<bool> MainWindow::AskToolInputsAsync(tools::Tool tool, std::vector<tools::Prompt> prompts, tools::FileContext file,
                                                          std::shared_ptr<std::map<std::wstring, std::wstring>> inputs)
     {
-        // One box per label. Each starts with what was typed for it last time this tool ran, or else
-        // (the first box) the selected text, if it's on one line.
+        // One box per label. Each starts with its default, if it has one that isn't empty (one that's the
+        // selected text is empty with nothing selected), or else with what was typed for it last time this
+        // tool ran. The selection is only used where a default asks for it.
         auto strong = get_strong();
-        std::wstring selection;
-        if (auto range = doc->Editor.Document().Selection(); range.Length() != 0)
-        {
-            hstring text;
-            range.GetText(TextGetOptions::None, text);
-            if (std::wstring_view{ text }.find(L'\r') == std::wstring_view::npos)
-            {
-                selection = text;
-            }
-        }
-
         StackPanel panel;
         panel.Spacing(12);
         std::vector<TextBox> boxes;
-        for (auto const& label : labels)
+        for (auto const& prompt : prompts)
         {
             TextBox box;
-            box.Header(box_value(label));
+            box.Header(box_value(prompt.Label));
             box.MinWidth(320);
             box.IsSpellCheckEnabled(false);
-            if (auto last = m_toolInputs.find({ tool.Name, label }); last != m_toolInputs.end())
+            auto value = prompt.HasDefault ? tools::ExpandPlaceholders(prompt.Default, file) : std::wstring{};
+            if (!value.empty())
+            {
+                box.Text(value);
+            }
+            else if (auto last = m_toolInputs.find({ tool.Name, prompt.Label }); last != m_toolInputs.end())
             {
                 box.Text(last->second);
-            }
-            else if (boxes.empty())
-            {
-                box.Text(selection);
             }
             panel.Children().Append(box);
             boxes.push_back(box);
@@ -201,10 +195,10 @@ namespace winrt::RadPad::implementation
             co_return false;
         }
 
-        for (size_t i = 0; i < labels.size(); ++i)
+        for (size_t i = 0; i < prompts.size(); ++i)
         {
-            (*inputs)[labels[i]] = boxes[i].Text();
-            m_toolInputs[{ tool.Name, labels[i] }] = boxes[i].Text();
+            (*inputs)[prompts[i].Label] = boxes[i].Text();
+            m_toolInputs[{ tool.Name, prompts[i].Label }] = boxes[i].Text();
         }
         co_return true;
     }
