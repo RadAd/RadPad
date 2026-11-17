@@ -106,7 +106,9 @@ namespace winrt::RadPad::implementation
         auto selection = editor.Document().Selection();
         if (selection.Length() != 0 || !text.empty())
         {
-            selection.SetText(TextSetOptions::None, text);
+            // Copied, as a view of part of a string isn't null-terminated, which passing it straight to
+            // SetText needs (C++/WinRT aborts otherwise).
+            selection.SetText(TextSetOptions::None, hstring{ text });
             selection.Collapse(false);
         }
     }
