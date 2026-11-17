@@ -115,6 +115,8 @@ namespace winrt::RadPad::implementation
                 e.Handled(OpenOutputLocationAtCaret());
             }
         })), true);
+        // Its scroll bars only exist once it's shown, which resizes it.
+        OutputBox().SizeChanged([](IInspectable const& sender, auto&&) { UseArrowOverScrollBars(sender.as<DependencyObject>()); });
         AddZoomAccelerators();
         m_languageErrors = syntax::LoadLanguages(LanguageFolders());
         BuildLanguageMenus();

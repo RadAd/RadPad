@@ -94,6 +94,7 @@ namespace winrt::RadPad::implementation
                 if (auto viewer = FindDescendant<ScrollViewer>(sender.as<DependencyObject>()))
                 {
                     d->ScrollViewer = viewer;
+                    UseArrowOverScrollBars(viewer);
                     auto onViewChanged = [this, weakDoc]()
                     {
                         if (auto scrolled = weakDoc.lock())

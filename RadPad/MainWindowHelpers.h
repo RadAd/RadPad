@@ -354,6 +354,22 @@ namespace mainwindow
         return nullptr;
     }
 
+    // Text boxes show the text pointer over their scroll bars too; give the bars the normal arrow.
+    // (ProtectedCursor is only reachable through IUIElementProtected.)
+    inline void UseArrowOverScrollBars(DependencyObject const& root)
+    {
+        for (int i = 0, count = VisualTreeHelper::GetChildrenCount(root); i < count; ++i)
+        {
+            auto child = VisualTreeHelper::GetChild(root, i);
+            if (auto bar = child.try_as<Primitives::ScrollBar>())
+            {
+                bar.as<IUIElementProtected>().ProtectedCursor(Microsoft::UI::Input::InputSystemCursor::Create(Microsoft::UI::Input::InputSystemCursorShape::Arrow));
+                continue;
+            }
+            UseArrowOverScrollBars(child);
+        }
+    }
+
     // The rectangle of the character at position, relative to the top-left of the view. RichEdit measures
     // from the top-left of the document, as the ScrollViewer around it does the scrolling.
     inline Windows::Foundation::Rect CharRectInView(RichEditTextDocument const& document, int position, int length, ScrollViewer const& viewer)
