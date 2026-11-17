@@ -17,9 +17,23 @@ namespace winrt::RadPad::implementation
         std::wstring Inserted;
     };
 
+    // Settings each tab has its own copy of. New tabs start with the defaults (Format > Default settings).
+    struct DocumentSettings
+    {
+        bool WordWrap{ false };
+        int Zoom{ 100 };          // percent
+        bool InsertSpaces{ false }; // Tab key inserts spaces rather than a tab
+        int IndentSize{ 4 };      // spaces per indent level when inserting spaces
+        int TabWidth{ 8 };        // width of a tab character, in spaces
+        bool ShowWhitespace{ false };
+        bool HighlightTrailingWhitespace{ true };
+        bool RainbowBrackets{ true };
+    };
+
     // State for one open tab. The editor stores line breaks as '\r'.
     struct Document
     {
+        DocumentSettings Settings;
         Microsoft::UI::Xaml::Controls::TabViewItem Tab{ nullptr };
         Microsoft::UI::Xaml::Controls::RichEditBox Editor{ nullptr };
         std::wstring Path;      // empty for an untitled document
@@ -112,6 +126,7 @@ namespace winrt::RadPad::implementation
         void TimeDate_Click(Sender const&, ClickArgs const&);
         void WordWrap_Click(Sender const&, ClickArgs const&);
         void Font_Click(Sender const&, ClickArgs const&);
+        void DefaultSettings_Click(Sender const&, ClickArgs const&);
         void ZoomIn_Click(Sender const&, ClickArgs const&);
         void ZoomOut_Click(Sender const&, ClickArgs const&);
         void ZoomReset_Click(Sender const&, ClickArgs const&);
@@ -242,7 +257,7 @@ namespace winrt::RadPad::implementation
 
         // Tabs and indentation
         void UpdateFontMetrics();
-        void InsertTab(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
+        void InsertTab(std::shared_ptr<Document> const& doc);
         void InsertNewLine(Microsoft::UI::Xaml::Controls::RichEditBox const& editor);
         bool SmartHome(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, bool extend);
         void JumpToMatchingBracket(std::shared_ptr<Document> const& doc, bool select);
@@ -268,10 +283,11 @@ namespace winrt::RadPad::implementation
         void UpdateStatusBar();
         void UpdateCaretPosition();
         void ApplyEditorSettings(std::shared_ptr<Document> const& doc);
-        void ApplyFont(Microsoft::UI::Text::ITextCharacterFormat const& format);
+        void ApplyFont(Microsoft::UI::Text::ITextCharacterFormat const& format, int zoom);
         bool IsDarkTheme();
         void ApplyEditorSettingsToAll();
         void SetZoom(int zoom);
+        void ZoomBy(int step);
         void AddZoomAccelerators();
         void InsertText(Microsoft::UI::Xaml::Controls::RichEditBox const& editor, std::wstring_view text);
         fire_and_forget PasteAsync(std::weak_ptr<Document> weakDoc);
@@ -290,6 +306,7 @@ namespace winrt::RadPad::implementation
         fire_and_forget ShowMessageAsync(hstring title, hstring message);
         fire_and_forget GoToLineAsync();
         fire_and_forget ChooseFontAsync();
+        fire_and_forget EditDefaultSettingsAsync();
         fire_and_forget ShowAboutAsync();
 
         // Drag and drop
@@ -310,11 +327,10 @@ namespace winrt::RadPad::implementation
         double m_fontPoints{ 11.0 };
         bool m_fontBold{ false };
         bool m_fontItalic{ false };
-        bool m_wordWrap{ false };
+        DocumentSettings m_defaults;                // for new tabs; each tab then has its own (Document::Settings)
+        textfile::TextEncoding m_defaultEncoding{ textfile::TextEncoding::Utf8 }; // for new documents
+        textfile::LineEnding m_defaultEol{ textfile::LineEnding::CRLF };
         bool m_statusBarVisible{ true };
-        bool m_showWhitespace{ false };
-        bool m_highlightTrailingWhitespace{ true };
-        bool m_rainbowBrackets{ true };
         bool m_overlayUpdatePending{ false };
         std::vector<std::wstring> m_recentFiles;  // most recent first
         Microsoft::UI::Dispatching::DispatcherQueueTimer m_jumpListSyncTimer{ nullptr };
@@ -339,10 +355,6 @@ namespace winrt::RadPad::implementation
         std::vector<std::pair<Microsoft::UI::Xaml::Controls::RadioMenuFlyoutItem, int>> m_themeItems; // in the Color theme menu
         bool m_fontMonospaced{ false };    // whether the editor font is monospaced
         double m_spaceAdvance{ 0.5 };      // width of a space in the editor font, as a fraction of the font size
-        bool m_insertSpaces{ false };      // Tab key inserts spaces rather than a tab
-        int m_indentSize{ 4 };             // spaces per indent level when inserting spaces
-        int m_tabWidth{ 8 };               // width of a tab character, in spaces
-        int m_zoom{ 100 };
         bool m_loaded{ false };
         std::weak_ptr<Document> m_draggedDocument; // the tab being dragged from this window, if any
         std::wstring m_draggedTabFile;             // and the file holding it for another window to read

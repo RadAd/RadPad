@@ -149,9 +149,11 @@ namespace winrt::RadPad::implementation
         m_spaceAdvance = metrics.SpaceAdvance;
     }
 
-    void MainWindow::InsertTab(RichEditBox const& editor)
+    void MainWindow::InsertTab(std::shared_ptr<Document> const& doc)
     {
-        if (!m_insertSpaces)
+        auto editor = doc->Editor;
+        auto const& settings = doc->Settings;
+        if (!settings.InsertSpaces)
         {
             InsertText(editor, L"\t");
             return;
@@ -166,9 +168,9 @@ namespace winrt::RadPad::implementation
         int column = 0;
         for (size_t i = lineStart; i < caret; ++i)
         {
-            column = text[i] == L'\t' ? (column / m_tabWidth + 1) * m_tabWidth : column + 1;
+            column = text[i] == L'\t' ? (column / settings.TabWidth + 1) * settings.TabWidth : column + 1;
         }
-        InsertText(editor, std::wstring(static_cast<size_t>(m_indentSize - column % m_indentSize), L' '));
+        InsertText(editor, std::wstring(static_cast<size_t>(settings.IndentSize - column % settings.IndentSize), L' '));
     }
 
     void MainWindow::InsertNewLine(RichEditBox const& editor)
@@ -264,8 +266,9 @@ namespace winrt::RadPad::implementation
 
         // One level of indentation: what Tab inserts at the start of a line, and what Shift+Tab removes
         // (a tab, or up to that many columns of spaces).
-        std::wstring unit = m_insertSpaces ? std::wstring(static_cast<size_t>(m_indentSize), L' ') : L"\t";
-        size_t columns = static_cast<size_t>(m_insertSpaces ? m_indentSize : m_tabWidth);
+        auto const& settings = doc->Settings;
+        std::wstring unit = settings.InsertSpaces ? std::wstring(static_cast<size_t>(settings.IndentSize), L' ') : L"\t";
+        size_t columns = static_cast<size_t>(settings.InsertSpaces ? settings.IndentSize : settings.TabWidth);
 
         std::wstring block;
         size_t removedBeforeCaret = 0; // for keeping the caret in place when outdenting one line
@@ -330,34 +333,39 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::SetIndentation(bool insertSpaces, int indentSize, int tabWidth)
     {
-        bool tabWidthChanged = tabWidth != m_tabWidth;
-        m_insertSpaces = insertSpaces;
-        m_indentSize = std::clamp(indentSize, 1, 8);
-        m_tabWidth = std::clamp(tabWidth, 1, 8);
+        // The current tab only; Format > Default settings sets them for new tabs.
+        auto doc = CurrentDocument();
+        if (!doc)
+        {
+            return;
+        }
+        auto& settings = doc->Settings;
+        bool tabWidthChanged = tabWidth != settings.TabWidth;
+        settings.InsertSpaces = insertSpaces;
+        settings.IndentSize = std::clamp(indentSize, 1, 8);
+        settings.TabWidth = std::clamp(tabWidth, 1, 8);
         if (tabWidthChanged)
         {
-            ApplyEditorSettingsToAll(); // sets each editor's tab stops
+            ApplyEditorSettings(doc); // sets the editor's tab stops
         }
         UpdateIndentUI();
-        SaveSettings();
-        if (auto doc = CurrentDocument())
-        {
-            FocusEditor(doc);
-        }
+        FocusEditor(doc);
     }
 
     void MainWindow::BuildIndentMenus()
     {
-        // The same menu appears under Format > Tabs and on the status bar button.
-        auto build = [this](Collections::IVector<MenuFlyoutItemBase> const& items, std::wstring const& group)
+        // The same menu appears under Format > Tabs and on the status bar button, and shows the current
+        // tab's settings.
+        auto current = [this] { auto doc = CurrentDocument(); return doc ? doc->Settings : m_defaults; };
+        auto build = [this, current](Collections::IVector<MenuFlyoutItemBase> const& items, std::wstring const& group)
         {
             for (bool spaces : { false, true })
             {
                 RadioMenuFlyoutItem item;
                 item.Text(spaces ? L"Indent using spaces" : L"Indent using tabs");
                 item.GroupName(group + L"Kind");
-                item.Click([this, spaces](auto&&, auto&&) { SetIndentation(spaces, m_indentSize, m_tabWidth); });
-                m_indentMenuUpdaters.push_back([this, item, spaces] { item.IsChecked(m_insertSpaces == spaces); });
+                item.Click([this, spaces, current](auto&&, auto&&) { auto s = current(); SetIndentation(spaces, s.IndentSize, s.TabWidth); });
+                m_indentMenuUpdaters.push_back([item, spaces, current] { item.IsChecked(current().InsertSpaces == spaces); });
                 items.Append(item);
             }
             items.Append(MenuFlyoutSeparator{});
@@ -371,11 +379,12 @@ namespace winrt::RadPad::implementation
                     RadioMenuFlyoutItem item;
                     item.Text(to_hstring(n));
                     item.GroupName(group + (indent ? L"Size" : L"Width"));
-                    item.Click([this, n, indent](auto&&, auto&&)
+                    item.Click([this, n, indent, current](auto&&, auto&&)
                     {
-                        SetIndentation(m_insertSpaces, indent ? n : m_indentSize, indent ? m_tabWidth : n);
+                        auto s = current();
+                        SetIndentation(s.InsertSpaces, indent ? n : s.IndentSize, indent ? s.TabWidth : n);
                     });
-                    m_indentMenuUpdaters.push_back([this, item, n, indent] { item.IsChecked((indent ? m_indentSize : m_tabWidth) == n); });
+                    m_indentMenuUpdaters.push_back([item, n, indent, current] { auto s = current(); item.IsChecked((indent ? s.IndentSize : s.TabWidth) == n); });
                     sizes.Items().Append(item);
                 }
                 items.Append(sizes);
@@ -392,9 +401,11 @@ namespace winrt::RadPad::implementation
         {
             update();
         }
-        IndentButton().Content(box_value(hstring{ m_insertSpaces
-            ? std::format(L"Spaces: {}", m_indentSize)
-            : std::format(L"Tab width: {}", m_tabWidth) }));
+        auto doc = CurrentDocument();
+        auto const& settings = doc ? doc->Settings : m_defaults;
+        IndentButton().Content(box_value(hstring{ settings.InsertSpaces
+            ? std::format(L"Spaces: {}", settings.IndentSize)
+            : std::format(L"Tab width: {}", settings.TabWidth) }));
     }
 
     void MainWindow::RecordEdit(std::shared_ptr<Document> const& doc, size_t start, std::wstring removed, std::wstring inserted)

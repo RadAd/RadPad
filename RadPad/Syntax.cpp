@@ -20,9 +20,10 @@ namespace syntax
             return plain;
         }
 
+        // Whether the Classify call in progress colours brackets, including in embedded languages.
         bool& RainbowBrackets()
         {
-            static bool on = true;
+            thread_local bool on = true;
             return on;
         }
 
@@ -412,13 +413,9 @@ namespace syntax
         return patterns;
     }
 
-    void SetRainbowBrackets(bool on)
+    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds, bool rainbowBrackets)
     {
-        RainbowBrackets() = on;
-    }
-
-    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds)
-    {
+        RainbowBrackets() = rainbowBrackets;
         kinds.assign(text.size(), TokenKind::Plain);
         if (text.size() <= MaxHighlightLength && language > PlainText && language < LanguageCount())
         {

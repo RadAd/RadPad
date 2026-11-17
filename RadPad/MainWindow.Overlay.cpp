@@ -6,8 +6,9 @@ namespace winrt::RadPad::implementation
 {
     void MainWindow::UpdateWhitespaceAvailability()
     {
-        // Markers are placed by column, which needs a monospaced font and unwrapped lines.
-        bool available = m_fontMonospaced && !m_wordWrap;
+        // Markers are placed by column, which needs a monospaced font and unwrapped lines (in the current tab).
+        auto doc = CurrentDocument();
+        bool available = m_fontMonospaced && !(doc && doc->Settings.WordWrap);
         ShowWhitespaceItem().IsEnabled(available);
         ToolTipService::SetToolTip(ShowWhitespaceItem(), available ? nullptr : box_value(L"Needs a monospaced font with word wrap off"));
         UpdateEditorOverlay();
@@ -36,16 +37,16 @@ namespace winrt::RadPad::implementation
         clip.Rect({ origin.X, origin.Y, static_cast<float>(presenter.ActualWidth()), static_cast<float>(presenter.ActualHeight()) });
         overlay.Clip(clip);
 
-        if (m_highlightTrailingWhitespace)
+        if (doc->Settings.HighlightTrailingWhitespace)
         {
             DrawTrailingWhitespace(doc, presenter); // first, so markers are drawn over it
         }
-        if (m_wordWrap)
+        if (doc->Settings.WordWrap)
         {
             DrawWrapMarkers(doc, presenter);
             return;
         }
-        if (!m_showWhitespace || !m_fontMonospaced)
+        if (!doc->Settings.ShowWhitespace || !m_fontMonospaced)
         {
             return;
         }
@@ -75,7 +76,7 @@ namespace winrt::RadPad::implementation
             {
             }
         }
-        double charWidth = m_spaceAdvance * m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0;
+        double charWidth = m_spaceAdvance * m_fontPoints * 96.0 / 72.0 * doc->Settings.Zoom / 100.0;
         double tabWidth = doc->Editor.Document().DefaultTabStop() * 96.0 / 72.0;
         if (lineHeight <= 0 || charWidth <= 0)
         {

@@ -188,7 +188,7 @@ namespace winrt::RadPad::implementation
         StatusMessageText().Text(L"");
         UpdateTitle();
         UpdateStatusBar();
-        UpdateEditorOverlay();
+        UpdateWhitespaceAvailability(); // depends on the tab's word wrap; also redraws the overlay
         if (current)
         {
             FocusEditor(current);
@@ -212,7 +212,7 @@ namespace winrt::RadPad::implementation
     {
         // Drag data for a tab: the path of the file holding it.
         constexpr wchar_t TabFormat[] = L"RadPad.Tab";
-        constexpr int64_t TabFileVersion = 2;
+        constexpr int64_t TabFileVersion = 4;
 
         struct TabFileWriter
         {
@@ -296,6 +296,14 @@ namespace winrt::RadPad::implementation
             writer.Number(doc->DiskStamp ? static_cast<int64_t>(doc->DiskStamp->second) : 0);
             writer.Number(doc->SelectionStart);
             writer.Number(doc->SelectionEnd);
+            writer.Number(doc->Settings.WordWrap);
+            writer.Number(doc->Settings.Zoom);
+            writer.Number(doc->Settings.InsertSpaces);
+            writer.Number(doc->Settings.IndentSize);
+            writer.Number(doc->Settings.TabWidth);
+            writer.Number(doc->Settings.ShowWhitespace);
+            writer.Number(doc->Settings.HighlightTrailingWhitespace);
+            writer.Number(doc->Settings.RainbowBrackets);
             for (auto const* stack : { &doc->UndoStack, &doc->RedoStack })
             {
                 writer.Number(static_cast<int64_t>(stack->size()));
@@ -326,6 +334,7 @@ namespace winrt::RadPad::implementation
         std::wstring filePath, url, text, savedText, language;
         int64_t encoding = 0, savedEncoding = 0, eol = 0, savedEol = 0, deleted = 0, hasStamp = 0, stamp1 = 0, stamp2 = 0, selectionStart = 0, selectionEnd = 0;
         std::vector<UndoRecord> stacks[2];
+        DocumentSettings settings;
         RECT position{};
         try
         {
@@ -350,6 +359,14 @@ namespace winrt::RadPad::implementation
             stamp2 = reader.Number();
             selectionStart = reader.Number();
             selectionEnd = reader.Number();
+            settings.WordWrap = reader.Number() != 0;
+            settings.Zoom = std::clamp(static_cast<int>(reader.Number()), MinZoom, MaxZoom);
+            settings.InsertSpaces = reader.Number() != 0;
+            settings.IndentSize = std::clamp(static_cast<int>(reader.Number()), 1, 8);
+            settings.TabWidth = std::clamp(static_cast<int>(reader.Number()), 1, 8);
+            settings.ShowWhitespace = reader.Number() != 0;
+            settings.HighlightTrailingWhitespace = reader.Number() != 0;
+            settings.RainbowBrackets = reader.Number() != 0;
             for (auto& stack : stacks)
             {
                 auto count = reader.Number();
@@ -373,6 +390,8 @@ namespace winrt::RadPad::implementation
         }
 
         auto doc = CreateDocument();
+        doc->Settings = settings;
+        ApplyEditorSettings(doc);
         doc->Path = filePath;
         doc->Url = url;
         doc->SavedText = savedText;

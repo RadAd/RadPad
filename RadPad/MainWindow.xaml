@@ -250,6 +250,11 @@
                     <MenuFlyoutSubItem x:Name="TabsMenu" Text="Tabs">
                         <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE8A0;" /></MenuFlyoutSubItem.Icon>
                     </MenuFlyoutSubItem>
+                    <MenuFlyoutSeparator />
+                    <!-- Word wrap, zoom and indentation above apply to the current tab; these are for new tabs. -->
+                    <MenuFlyoutItem Text="Default settings..." Click="DefaultSettings_Click">
+                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE713;" /></MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
                 </MenuBarItem>
 
                 <MenuBarItem Title="View">

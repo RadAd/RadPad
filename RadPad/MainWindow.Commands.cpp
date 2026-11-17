@@ -19,14 +19,19 @@ namespace winrt::RadPad::implementation
     void MainWindow::GoTo_Click(IInspectable const&, RoutedEventArgs const&) { GoToLineAsync(); }
     void MainWindow::Font_Click(IInspectable const&, RoutedEventArgs const&) { ChooseFontAsync(); }
     void MainWindow::About_Click(IInspectable const&, RoutedEventArgs const&) { ShowAboutAsync(); }
-    void MainWindow::ZoomIn_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(m_zoom + ZoomStep); }
-    void MainWindow::ZoomOut_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(m_zoom - ZoomStep); }
-    void MainWindow::ZoomReset_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(DefaultZoom); }
+    void MainWindow::DefaultSettings_Click(IInspectable const&, RoutedEventArgs const&) { EditDefaultSettingsAsync(); }
+    void MainWindow::ZoomIn_Click(IInspectable const&, RoutedEventArgs const&) { ZoomBy(ZoomStep); }
+    void MainWindow::ZoomOut_Click(IInspectable const&, RoutedEventArgs const&) { ZoomBy(-ZoomStep); }
+    void MainWindow::ZoomReset_Click(IInspectable const&, RoutedEventArgs const&) { SetZoom(m_defaults.Zoom); }
 
     void MainWindow::WordWrap_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        m_wordWrap = WordWrapItem().IsChecked();
-        ApplyEditorSettingsToAll();
+        // The current tab only; Format > Default settings sets it for new tabs.
+        if (auto doc = CurrentDocument())
+        {
+            doc->Settings.WordWrap = WordWrapItem().IsChecked();
+            ApplyEditorSettings(doc);
+        }
         UpdateWhitespaceAvailability();
     }
 
@@ -38,10 +43,10 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::RainbowBrackets_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        m_rainbowBrackets = RainbowBracketsItem().IsChecked();
-        syntax::SetRainbowBrackets(m_rainbowBrackets);
-        for (auto const& doc : m_documents)
+        // These three apply to the current tab only, like word wrap; see Format > Default settings.
+        if (auto doc = CurrentDocument())
         {
+            doc->Settings.RainbowBrackets = RainbowBracketsItem().IsChecked();
             UpdateHighlighting(doc, false);
         }
     }
@@ -57,13 +62,19 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::TrailingWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        m_highlightTrailingWhitespace = TrailingWhitespaceItem().IsChecked();
+        if (auto doc = CurrentDocument())
+        {
+            doc->Settings.HighlightTrailingWhitespace = TrailingWhitespaceItem().IsChecked();
+        }
         UpdateEditorOverlay();
     }
 
     void MainWindow::ShowWhitespace_Click(IInspectable const&, RoutedEventArgs const&)
     {
-        m_showWhitespace = ShowWhitespaceItem().IsChecked();
+        if (auto doc = CurrentDocument())
+        {
+            doc->Settings.ShowWhitespace = ShowWhitespaceItem().IsChecked();
+        }
         UpdateEditorOverlay();
     }
 

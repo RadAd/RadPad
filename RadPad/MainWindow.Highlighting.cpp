@@ -77,7 +77,7 @@ namespace winrt::RadPad::implementation
             applied.assign(text.size(), TokenKind::Unknown);
         }
 
-        syntax::Classify(doc->Language, text, doc->DesiredKinds);
+        syntax::Classify(doc->Language, text, doc->DesiredKinds, doc->Settings.RainbowBrackets);
         doc->HighlightedText = std::move(text);
 
         // New text gets the editor font and the plain colour, removing any formatting it came with.
@@ -101,7 +101,7 @@ namespace winrt::RadPad::implementation
                 scope.emplace(doc->Editor);
             }
             auto format = document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat();
-            ApplyFont(format);
+            ApplyFont(format, doc->Settings.Zoom);
             format.ForegroundColor(TokenColor(TokenKind::Plain));
             std::fill(applied.begin() + i, applied.begin() + j, TokenKind::Plain);
             i = j;

@@ -91,7 +91,6 @@ namespace winrt::RadPad::implementation
         LoadSettings();
         UpdateFontMetrics();
         OnRecentFilesChanged();
-        WordWrapItem().IsChecked(m_wordWrap);
         StatusBarItem().IsChecked(m_statusBarVisible);
         StatusBar().Visibility(m_statusBarVisible ? Visibility::Visible : Visibility::Collapsed);
         ShowOutputPanel(m_outputPanelVisible);
@@ -124,9 +123,6 @@ namespace winrt::RadPad::implementation
         BuildColorThemeMenu();
         ApplyColorTheme();
         BuildIndentMenus();
-        ShowWhitespaceItem().IsChecked(m_showWhitespace);
-        TrailingWhitespaceItem().IsChecked(m_highlightTrailingWhitespace);
-        RainbowBracketsItem().IsChecked(m_rainbowBrackets);
         UpdateWhitespaceAvailability();
 
         // A colour theme can have different colours for the app's light and dark modes.
@@ -293,13 +289,19 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::UpdateStatusBar()
     {
-        ZoomText().Text(std::format(L"{}%", m_zoom));
-
         auto doc = CurrentDocument();
         if (!doc)
         {
             return;
         }
+
+        // The tab's own settings.
+        ZoomText().Text(std::format(L"{}%", doc->Settings.Zoom));
+        WordWrapItem().IsChecked(doc->Settings.WordWrap);
+        ShowWhitespaceItem().IsChecked(doc->Settings.ShowWhitespace);
+        TrailingWhitespaceItem().IsChecked(doc->Settings.HighlightTrailingWhitespace);
+        RainbowBracketsItem().IsChecked(doc->Settings.RainbowBrackets);
+        UpdateIndentUI();
 
         LineEndingButton().Content(box_value(hstring{ textfile::LineEndingName(doc->Eol) }));
         EncodingButton().Content(box_value(hstring{ textfile::EncodingName(doc->Encoding) }));
@@ -339,45 +341,46 @@ namespace winrt::RadPad::implementation
             : std::format(L"{} characters", text.size()));
     }
 
-    void MainWindow::ApplyFont(ITextCharacterFormat const& format)
+    void MainWindow::ApplyFont(ITextCharacterFormat const& format, int zoom)
     {
         // Bold and italic are left to the control's FontWeight and FontStyle: setting them on a range
         // takes RichEdit around 70µs per character, against milliseconds for the control properties.
         format.Name(m_fontFamily);
-        format.Size(static_cast<float>(m_fontPoints * m_zoom / 100.0));
+        format.Size(static_cast<float>(m_fontPoints * zoom / 100.0));
     }
 
     void MainWindow::ApplyEditorSettings(std::shared_ptr<Document> const& doc)
     {
         auto editor = doc->Editor;
+        auto const& settings = doc->Settings;
         editor.FontFamily(Media::FontFamily{ m_fontFamily });
-        editor.FontSize(m_fontPoints * 96.0 / 72.0 * m_zoom / 100.0);
+        editor.FontSize(m_fontPoints * 96.0 / 72.0 * settings.Zoom / 100.0);
         editor.FontWeight(m_fontBold ? Microsoft::UI::Text::FontWeights::Bold() : Microsoft::UI::Text::FontWeights::Normal());
         editor.FontStyle(m_fontItalic ? Windows::UI::Text::FontStyle::Italic : Windows::UI::Text::FontStyle::Normal);
-        editor.TextWrapping(m_wordWrap ? TextWrapping::Wrap : TextWrapping::NoWrap);
+        editor.TextWrapping(settings.WordWrap ? TextWrapping::Wrap : TextWrapping::NoWrap);
         // A dark colour theme with the app in light mode, or the other way round, brings its own background;
         // match the editor to it so the caret, selection and scrollbars stay visible.
         bool appIsDark = IsDarkTheme();
         editor.RequestedTheme(m_palette.Dark == appIsDark ? ElementTheme::Default : m_palette.Dark ? ElementTheme::Dark : ElementTheme::Light);
         // With word wrap, room on the right for the wrap markers (see DrawWrapMarkers).
-        editor.Padding(Thickness{ EditorPadding, 8, EditorPadding + (m_wordWrap ? WrapMarkerWidth : 0), 8 });
+        editor.Padding(Thickness{ EditorPadding, 8, EditorPadding + (settings.WordWrap ? WrapMarkerWidth : 0), 8 });
 
         // Set the font name and size on the existing text and on the default format for new text too,
         // since text that has been coloured carries its own character formatting.
         auto document = editor.Document();
         FormattingScope scope{ editor };
         auto defaultFormat = document.GetDefaultCharacterFormat();
-        ApplyFont(defaultFormat);
+        ApplyFont(defaultFormat, settings.Zoom);
         defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain));
         document.SetDefaultCharacterFormat(defaultFormat);
-        // Tab stops every m_tabWidth spaces, in points (the font size is in points too). RichEditBox
+        // Tab stops every TabWidth spaces, in points (the font size is in points too). RichEditBox
         // paragraphs also carry an explicit stop at half an inch, which would come first, so clear it.
-        document.DefaultTabStop(static_cast<float>(m_tabWidth * m_spaceAdvance * m_fontPoints * m_zoom / 100.0));
+        document.DefaultTabStop(static_cast<float>(settings.TabWidth * m_spaceAdvance * m_fontPoints * settings.Zoom / 100.0));
         auto defaultParagraph = document.GetDefaultParagraphFormat();
         defaultParagraph.ClearAllTabs();
         document.SetDefaultParagraphFormat(defaultParagraph);
         document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).ParagraphFormat().ClearAllTabs();
-        ApplyFont(document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).CharacterFormat());
+        ApplyFont(document.GetRange(0, static_cast<int>(EditorText(editor).size()) + 1).CharacterFormat(), settings.Zoom);
         ScheduleRepaint(doc); // a font or zoom change can bring more text into view
     }
 
@@ -396,9 +399,24 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::SetZoom(int zoom)
     {
-        m_zoom = std::clamp(zoom, MinZoom, MaxZoom);
-        ApplyEditorSettingsToAll();
-        ZoomText().Text(std::format(L"{}%", m_zoom));
+        // The current tab's zoom; the others keep theirs.
+        auto doc = CurrentDocument();
+        if (!doc)
+        {
+            return;
+        }
+        doc->Settings.Zoom = std::clamp(zoom, MinZoom, MaxZoom);
+        ApplyEditorSettings(doc);
+        ZoomText().Text(std::format(L"{}%", doc->Settings.Zoom));
+        UpdateEditorOverlay();
+    }
+
+    void MainWindow::ZoomBy(int step)
+    {
+        if (auto doc = CurrentDocument())
+        {
+            SetZoom(doc->Settings.Zoom + step);
+        }
     }
 
     void MainWindow::AddZoomAccelerators()
@@ -488,15 +506,18 @@ namespace winrt::RadPad::implementation
         }
         m_fontBold = GetPrivateProfileIntW(L"Editor", L"Bold", 0, path.c_str()) != 0;
         m_fontItalic = GetPrivateProfileIntW(L"Editor", L"Italic", 0, path.c_str()) != 0;
-        m_wordWrap = GetPrivateProfileIntW(L"Editor", L"WordWrap", 0, path.c_str()) != 0;
-        m_insertSpaces = GetPrivateProfileIntW(L"Editor", L"InsertSpaces", 0, path.c_str()) != 0;
-        m_indentSize = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"IndentSize", 4, path.c_str())), 1, 8);
-        m_tabWidth = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"TabWidth", 8, path.c_str())), 1, 8);
+        // The defaults for new tabs (Format > Default settings).
+        m_defaults.WordWrap = GetPrivateProfileIntW(L"Editor", L"WordWrap", 0, path.c_str()) != 0;
+        m_defaults.Zoom = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"Zoom", DefaultZoom, path.c_str())), MinZoom, MaxZoom);
+        m_defaults.InsertSpaces = GetPrivateProfileIntW(L"Editor", L"InsertSpaces", 0, path.c_str()) != 0;
+        m_defaults.IndentSize = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"IndentSize", 4, path.c_str())), 1, 8);
+        m_defaults.TabWidth = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"TabWidth", 8, path.c_str())), 1, 8);
+        m_defaultEncoding = static_cast<TextEncoding>(std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"Encoding", 0, path.c_str())), 0, textfile::EncodingCount - 1));
+        m_defaultEol = static_cast<LineEnding>(std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Editor", L"LineEnding", 0, path.c_str())), 0, 2));
         m_statusBarVisible = GetPrivateProfileIntW(L"View", L"StatusBar", 1, path.c_str()) != 0;
-        m_showWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
-        m_highlightTrailingWhitespace = GetPrivateProfileIntW(L"View", L"HighlightTrailingWhitespace", 1, path.c_str()) != 0;
-        m_rainbowBrackets = GetPrivateProfileIntW(L"View", L"RainbowBrackets", 1, path.c_str()) != 0;
-        syntax::SetRainbowBrackets(m_rainbowBrackets);
+        m_defaults.ShowWhitespace = GetPrivateProfileIntW(L"View", L"ShowWhitespace", 0, path.c_str()) != 0;
+        m_defaults.HighlightTrailingWhitespace = GetPrivateProfileIntW(L"View", L"HighlightTrailingWhitespace", 1, path.c_str()) != 0;
+        m_defaults.RainbowBrackets = GetPrivateProfileIntW(L"View", L"RainbowBrackets", 1, path.c_str()) != 0;
         m_outputPanelVisible = GetPrivateProfileIntW(L"View", L"OutputPanel", 0, path.c_str()) != 0;
         m_outputPanelHeight = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"View", L"OutputPanelHeight", 200, path.c_str())), 60, 2000);
 
@@ -525,14 +546,17 @@ namespace winrt::RadPad::implementation
         WritePrivateProfileStringW(L"Editor", L"FontSize", std::format(L"{:g}", m_fontPoints).c_str(), path.c_str());
         WritePrivateProfileStringW(L"Editor", L"Bold", m_fontBold ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"Editor", L"Italic", m_fontItalic ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"Editor", L"WordWrap", m_wordWrap ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"Editor", L"InsertSpaces", m_insertSpaces ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"Editor", L"IndentSize", std::to_wstring(m_indentSize).c_str(), path.c_str());
-        WritePrivateProfileStringW(L"Editor", L"TabWidth", std::to_wstring(m_tabWidth).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"WordWrap", m_defaults.WordWrap ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"Zoom", std::to_wstring(m_defaults.Zoom).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"InsertSpaces", m_defaults.InsertSpaces ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"IndentSize", std::to_wstring(m_defaults.IndentSize).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"TabWidth", std::to_wstring(m_defaults.TabWidth).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"Encoding", std::to_wstring(static_cast<int>(m_defaultEncoding)).c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Editor", L"LineEnding", std::to_wstring(static_cast<int>(m_defaultEol)).c_str(), path.c_str());
         WritePrivateProfileStringW(L"View", L"StatusBar", m_statusBarVisible ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_showWhitespace ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"View", L"HighlightTrailingWhitespace", m_highlightTrailingWhitespace ? L"1" : L"0", path.c_str());
-        WritePrivateProfileStringW(L"View", L"RainbowBrackets", m_rainbowBrackets ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"ShowWhitespace", m_defaults.ShowWhitespace ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"HighlightTrailingWhitespace", m_defaults.HighlightTrailingWhitespace ? L"1" : L"0", path.c_str());
+        WritePrivateProfileStringW(L"View", L"RainbowBrackets", m_defaults.RainbowBrackets ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"OutputPanel", m_outputPanelVisible ? L"1" : L"0", path.c_str());
         WritePrivateProfileStringW(L"View", L"OutputPanelHeight", std::to_wstring(static_cast<int>(m_outputPanelHeight)).c_str(), path.c_str());
 

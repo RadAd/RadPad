@@ -203,6 +203,159 @@ namespace winrt::RadPad::implementation
         SaveSettings();
     }
 
+    fire_and_forget MainWindow::EditDefaultSettingsAsync()
+    {
+        // The settings new tabs start with. Each tab then has its own copy (DocumentSettings), so changing
+        // them in a tab doesn't change these, and these don't change open tabs.
+        auto strong = get_strong();
+
+        auto combo = [](wchar_t const* header, std::vector<std::wstring> const& names, int selected)
+        {
+            ComboBox box;
+            box.Header(box_value(header));
+            for (auto const& name : names)
+            {
+                box.Items().Append(box_value(hstring{ name }));
+            }
+            box.SelectedIndex(selected);
+            box.MinWidth(200);
+            return box;
+        };
+        auto number = [](wchar_t const* header, double minimum, double maximum, double step, double value)
+        {
+            NumberBox box;
+            box.Header(box_value(header));
+            box.Minimum(minimum);
+            box.Maximum(maximum);
+            box.SmallChange(step);
+            box.LargeChange(step);
+            box.Value(value);
+            box.SpinButtonPlacementMode(NumberBoxSpinButtonPlacementMode::Inline);
+            box.MinWidth(200);
+            return box;
+        };
+
+        std::vector<std::wstring> encodings;
+        for (int i = 0; i < textfile::EncodingCount; ++i)
+        {
+            encodings.emplace_back(textfile::EncodingName(static_cast<TextEncoding>(i)));
+        }
+        std::vector<std::wstring> eols;
+        for (auto eol : { LineEnding::CRLF, LineEnding::LF, LineEnding::CR })
+        {
+            eols.emplace_back(textfile::LineEndingName(eol));
+        }
+
+        auto check = [](wchar_t const* text)
+        {
+            CheckBox box;
+            box.Content(box_value(text));
+            return box;
+        };
+        auto wrapBox = check(L"Word wrap");
+        auto whitespaceBox = check(L"Show whitespace");
+        auto trailingBox = check(L"Highlight trailing whitespace");
+        auto bracketsBox = check(L"Rainbow brackets");
+        auto zoomBox = number(L"Zoom (%)", MinZoom, MaxZoom, ZoomStep, 0);
+        auto indentKindBox = combo(L"Tab key inserts", { L"A tab", L"Spaces" }, 0);
+        auto indentSizeBox = number(L"Indent size (spaces)", 1, 8, 1, 0);
+        auto tabWidthBox = number(L"Tab width", 1, 8, 1, 0);
+        auto encodingBox = combo(L"Encoding", encodings, 0);
+        auto eolBox = combo(L"Line ending", eols, 0);
+        auto show = [=](DocumentSettings const& settings)
+        {
+            wrapBox.IsChecked(settings.WordWrap);
+            whitespaceBox.IsChecked(settings.ShowWhitespace);
+            trailingBox.IsChecked(settings.HighlightTrailingWhitespace);
+            bracketsBox.IsChecked(settings.RainbowBrackets);
+            zoomBox.Value(settings.Zoom);
+            indentKindBox.SelectedIndex(settings.InsertSpaces ? 1 : 0);
+            indentSizeBox.Value(settings.IndentSize);
+            tabWidthBox.Value(settings.TabWidth);
+        };
+        show(m_defaults);
+        encodingBox.SelectedIndex(static_cast<int>(m_defaultEncoding));
+        eolBox.SelectedIndex(static_cast<int>(m_defaultEol));
+
+        // Copies the current tab's settings, to make what's been set up there the default.
+        Button fromTab;
+        fromTab.Content(box_value(L"Use the current tab's settings"));
+        auto doc = CurrentDocument();
+        fromTab.IsEnabled(doc != nullptr);
+        fromTab.Click([=](auto&&, auto&&)
+        {
+            show(doc->Settings);
+            encodingBox.SelectedIndex(static_cast<int>(doc->Encoding));
+            eolBox.SelectedIndex(static_cast<int>(doc->Eol));
+        });
+
+        TextBlock note;
+        note.Text(L"Used for new tabs and files opened from now on; open tabs keep their own settings. "
+                  L"A file that's opened keeps its own encoding and line ending.");
+        note.TextWrapping(TextWrapping::Wrap);
+        note.Opacity(0.8);
+
+        Grid grid;
+        grid.ColumnSpacing(16);
+        grid.RowSpacing(12);
+        for (int i = 0; i < 2; ++i)
+        {
+            grid.ColumnDefinitions().Append(ColumnDefinition{});
+        }
+        for (int i = 0; i < 6; ++i)
+        {
+            grid.RowDefinitions().Append(RowDefinition{});
+        }
+        auto place = [&](FrameworkElement const& element, int row, int column)
+        {
+            Grid::SetRow(element, row);
+            Grid::SetColumn(element, column);
+            grid.Children().Append(element);
+        };
+        place(wrapBox, 0, 0);
+        place(zoomBox, 0, 1);
+        place(indentKindBox, 1, 0);
+        place(indentSizeBox, 1, 1);
+        place(tabWidthBox, 2, 0);
+        place(encodingBox, 3, 0);
+        place(eolBox, 3, 1);
+        place(whitespaceBox, 4, 0);
+        place(trailingBox, 4, 1);
+        place(bracketsBox, 5, 0);
+
+        StackPanel content;
+        content.Spacing(16);
+        content.Children().Append(note);
+        content.Children().Append(grid);
+        content.Children().Append(fromTab);
+
+        ContentDialog dialog;
+        dialog.Title(box_value(L"Default settings"));
+        dialog.Content(content);
+        dialog.PrimaryButtonText(L"OK");
+        dialog.CloseButtonText(L"Cancel");
+        dialog.DefaultButton(ContentDialogButton::Primary);
+        if (co_await ShowDialogAsync(dialog) != ContentDialogResult::Primary)
+        {
+            co_return;
+        }
+
+        // A box left empty keeps the old value.
+        auto read = [](NumberBox const& box, int old) { return std::isnan(box.Value()) ? old : static_cast<int>(box.Value()); };
+        auto checked = [](CheckBox const& box) { return box.IsChecked() && box.IsChecked().Value(); };
+        m_defaults.WordWrap = checked(wrapBox);
+        m_defaults.ShowWhitespace = checked(whitespaceBox);
+        m_defaults.HighlightTrailingWhitespace = checked(trailingBox);
+        m_defaults.RainbowBrackets = checked(bracketsBox);
+        m_defaults.Zoom = std::clamp(read(zoomBox, m_defaults.Zoom), MinZoom, MaxZoom);
+        m_defaults.InsertSpaces = indentKindBox.SelectedIndex() == 1;
+        m_defaults.IndentSize = std::clamp(read(indentSizeBox, m_defaults.IndentSize), 1, 8);
+        m_defaults.TabWidth = std::clamp(read(tabWidthBox, m_defaults.TabWidth), 1, 8);
+        m_defaultEncoding = static_cast<TextEncoding>(std::max(encodingBox.SelectedIndex(), 0));
+        m_defaultEol = static_cast<LineEnding>(std::max(eolBox.SelectedIndex(), 0));
+        SaveSettings();
+    }
+
     fire_and_forget MainWindow::ShowAboutAsync()
     {
         auto strong = get_strong();

@@ -46,9 +46,7 @@ namespace syntax
     // any whole file names. Empty for Plain text and for languages that list neither.
     std::vector<std::wstring> LanguagePatterns(LanguageId language);
 
-    // Resizes kinds to text.size() and sets the token kind of every character.
-    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds);
-
-    // Whether brackets in code are coloured by nesting depth (Bracket1 to Bracket3). On by default.
-    void SetRainbowBrackets(bool on);
+    // Resizes kinds to text.size() and sets the token kind of every character. With rainbowBrackets,
+    // brackets in code are coloured by nesting depth (Bracket1 to Bracket3).
+    void Classify(LanguageId language, std::wstring_view text, std::vector<TokenKind>& kinds, bool rainbowBrackets);
 }

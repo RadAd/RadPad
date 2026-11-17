@@ -21,6 +21,9 @@ namespace winrt::RadPad::implementation
     {
         auto doc = std::make_shared<Document>();
         std::weak_ptr<Document> weakDoc = doc;
+        doc->Settings = m_defaults;
+        doc->Encoding = doc->SavedEncoding = m_defaultEncoding; // a file opened in it brings its own
+        doc->Eol = doc->SavedEol = m_defaultEol;
 
         // A RichEditBox rather than a TextBox so that text can be coloured. It's used as a plain-text
         // editor: the highlighter owns all formatting, and text is copied and pasted as plain text.
@@ -69,7 +72,7 @@ namespace winrt::RadPad::implementation
                 if (d == CurrentDocument())
                 {
                     UpdateCaretPosition();
-                    if (m_highlightTrailingWhitespace)
+                    if (d->Settings.HighlightTrailingWhitespace)
                     {
                         ScheduleOverlayUpdate(); // whitespace at the caret isn't highlighted
                     }
@@ -135,7 +138,7 @@ namespace winrt::RadPad::implementation
                 }
                 else
                 {
-                    InsertTab(d->Editor);
+                    InsertTab(d);
                 }
                 e.Handled(true);
                 return;
@@ -193,11 +196,11 @@ namespace winrt::RadPad::implementation
                 break;
             case VK_OEM_PLUS: case VK_ADD:
                 // Handled here because RichEditBox uses Ctrl+= for subscript.
-                SetZoom(m_zoom + ZoomStep);
+                ZoomBy(ZoomStep);
                 e.Handled(true);
                 break;
             case VK_OEM_MINUS: case VK_SUBTRACT:
-                SetZoom(m_zoom - ZoomStep);
+                ZoomBy(-ZoomStep);
                 e.Handled(true);
                 break;
             }
@@ -207,7 +210,7 @@ namespace winrt::RadPad::implementation
             if ((e.KeyModifiers() & VirtualKeyModifiers::Control) == VirtualKeyModifiers::Control)
             {
                 int delta = e.GetCurrentPoint(sender.as<UIElement>()).Properties().MouseWheelDelta();
-                SetZoom(m_zoom + (delta > 0 ? ZoomStep : -ZoomStep));
+                ZoomBy(delta > 0 ? ZoomStep : -ZoomStep);
                 e.Handled(true);
             }
         } }), true);
