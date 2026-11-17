@@ -312,8 +312,7 @@ namespace winrt::RadPad::implementation
         Utf16LEItem().IsChecked(doc->Encoding == TextEncoding::Utf16LE);
         Utf16BEItem().IsChecked(doc->Encoding == TextEncoding::Utf16BE);
         AnsiItem().IsChecked(doc->Encoding == TextEncoding::Ansi);
-        ReadOnlyItem().IsChecked(doc->ReadOnly);
-        ReadOnlyItem().IsEnabled(!doc->Path.empty());
+        UpdateReadOnlyItem(doc);
         for (auto const& [item, language] : m_languageItems)
         {
             item.IsChecked(language == doc->Language);

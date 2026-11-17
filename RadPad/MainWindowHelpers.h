@@ -615,6 +615,41 @@ namespace mainwindow
         return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0;
     }
 
+    // Whether the user's permissions allow writing to a file, going by its security rather than its read-only
+    // attribute. Assumed so where that can't be told, as on a drive without permissions.
+    inline bool CanWriteFile(std::wstring const& path)
+    {
+        constexpr SECURITY_INFORMATION parts = OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+        DWORD size = 0;
+        GetFileSecurityW(path.c_str(), parts, nullptr, 0, &size);
+        std::vector<BYTE> descriptor(size);
+        if (size == 0 || !GetFileSecurityW(path.c_str(), parts, descriptor.data(), size, &size))
+        {
+            return true;
+        }
+
+        // AccessCheck needs an impersonation token.
+        winrt::handle processToken;
+        winrt::handle token;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, processToken.put())
+            || !DuplicateToken(processToken.get(), SecurityImpersonation, token.put()))
+        {
+            return true;
+        }
+        GENERIC_MAPPING mapping{ FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS };
+        DWORD access = GENERIC_WRITE;
+        MapGenericMask(&access, &mapping);
+        PRIVILEGE_SET privileges{};
+        DWORD privilegesSize = sizeof(privileges);
+        DWORD granted = 0;
+        BOOL allowed = FALSE;
+        if (!AccessCheck(descriptor.data(), token.get(), access, &mapping, &privileges, &privilegesSize, &granted, &allowed))
+        {
+            return true;
+        }
+        return allowed != FALSE;
+    }
+
     // %LOCALAPPDATA%\RadPad\Themes: colour themes added or customised by the user.
     inline std::wstring UserThemeFolder()
     {

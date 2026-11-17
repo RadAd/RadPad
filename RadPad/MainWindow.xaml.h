@@ -49,6 +49,7 @@ namespace winrt::RadPad::implementation
         std::optional<std::optional<std::pair<uint64_t, uint64_t>>> PendingDiskStamp; // a change seen, not yet acted on
         bool DeletedOnDisk{ false };                 // the file was deleted while open; saving recreates it
         bool ReadOnly{ false };                      // the file has the read-only attribute, so the editor allows no changes
+        bool CanWrite{ true };                       // the user's permissions allow writing the file; if not, no changes either
         bool AskingToReload{ false };
         bool IsClosing{ false };
         bool RefreshPending{ false };
@@ -200,6 +201,7 @@ namespace winrt::RadPad::implementation
         void CheckDocumentFile(std::shared_ptr<Document> const& doc);
         bool ReloadDocument(std::shared_ptr<Document> const& doc);
         void UpdateReadOnly(std::shared_ptr<Document> const& doc);
+        void UpdateReadOnlyItem(std::shared_ptr<Document> const& doc);
         fire_and_forget AskToReloadAsync(std::shared_ptr<Document> doc, std::optional<std::pair<uint64_t, uint64_t>> stamp);
         void BuildToolsMenu();
         void AddToolItems(Windows::Foundation::Collections::IVector<Microsoft::UI::Xaml::Controls::MenuFlyoutItemBase> const& items, std::vector<tools::Tool> const& list, int iconSize);

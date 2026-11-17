@@ -478,18 +478,27 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::UpdateReadOnly(std::shared_ptr<Document> const& doc)
     {
-        // Follows the file's read-only attribute. A tab being moved to another window stays read-only until
-        // that's done (see MoveTabToNewProcessAsync).
+        // Follows the file's read-only attribute and the user's permission to write it. A tab being moved to
+        // another window stays read-only until that's done (see MoveTabToNewProcessAsync).
         doc->ReadOnly = !doc->Path.empty() && IsReadOnlyFile(doc->Path);
+        doc->CanWrite = doc->Path.empty() || doc->DeletedOnDisk || CanWriteFile(doc->Path);
         if (!doc->IsClosing)
         {
-            doc->Editor.IsReadOnly(doc->ReadOnly);
+            doc->Editor.IsReadOnly(doc->ReadOnly || !doc->CanWrite);
         }
         if (doc == CurrentDocument())
         {
-            ReadOnlyItem().IsChecked(doc->ReadOnly);
-            ReadOnlyItem().IsEnabled(!doc->Path.empty());
+            UpdateReadOnlyItem(doc);
         }
+    }
+
+    void MainWindow::UpdateReadOnlyItem(std::shared_ptr<Document> const& doc)
+    {
+        // Without permission to write the file, the attribute makes no difference, so it can't be changed.
+        auto item = ReadOnlyItem();
+        item.IsChecked(doc->ReadOnly || !doc->CanWrite);
+        item.IsEnabled(!doc->Path.empty() && doc->CanWrite);
+        item.Text(doc->CanWrite ? L"Read-only" : L"Read-only (no permission to change the file)");
     }
 
     bool MainWindow::ReloadDocument(std::shared_ptr<Document> const& doc)
