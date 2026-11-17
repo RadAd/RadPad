@@ -661,11 +661,18 @@ namespace winrt::RadPad::implementation
         EndTabCycle();
         NoteRecentTab(CurrentDocument()); // also drops the closed document
 
-        // Like Notepad, closing the last tab closes the window.
+        // Like Notepad, closing the last tab closes the window. Not straight away: this can be in the middle of
+        // dropping this window's last tab on another window, which closes this one itself when it's done.
         if (m_documents.empty())
         {
             m_forceClose = true;
-            Close();
+            DispatcherQueue().TryEnqueue([self = get_strong()]
+            {
+                if (!self->m_closed && self->m_documents.empty())
+                {
+                    self->Close();
+                }
+            });
         }
     }
 }

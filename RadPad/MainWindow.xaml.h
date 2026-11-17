@@ -70,6 +70,11 @@ namespace winrt::RadPad::implementation
         void Tabs_AddTabButtonClick(Microsoft::UI::Xaml::Controls::TabView const& sender, Windows::Foundation::IInspectable const& e);
         void Tabs_TabCloseRequested(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabCloseRequestedEventArgs const& e);
         void Tabs_SelectionChanged(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& e);
+        void Tabs_TabDragStarting(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabDragStartingEventArgs const& e);
+        void Tabs_TabDragCompleted(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabDragCompletedEventArgs const& e);
+        void Tabs_TabDroppedOutside(Microsoft::UI::Xaml::Controls::TabView const& sender, Microsoft::UI::Xaml::Controls::TabViewTabDroppedOutsideEventArgs const& e);
+        void Tabs_TabStripDragOver(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::DragEventArgs const& e);
+        fire_and_forget Tabs_TabStripDrop(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::DragEventArgs e);
         void FindBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void ReplaceBox_KeyDown(Windows::Foundation::IInspectable const& sender, Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& e);
         void TabMenu_Opening(Windows::Foundation::IInspectable const& sender, Windows::Foundation::IInspectable const& e);
@@ -162,6 +167,13 @@ namespace winrt::RadPad::implementation
         void EndTabCycle();
         void NoteRecentTab(std::shared_ptr<Document> const& doc);
         void SelectTabAt(int index);
+        // Dragging a tab out of the window into a new RadPad process, or onto another RadPad window's tabs
+        // (MainWindow.Tabs.cpp). The tab's document is written to a temporary file, which the window that
+        // takes it reads and deletes; this window closes the tab only once the file has gone.
+        bool WriteTabFile(std::wstring const& path, std::shared_ptr<Document> const& doc, RECT const& window);
+        std::shared_ptr<Document> ReadTabFile(std::wstring const& path, std::optional<uint32_t> index, RECT* window);
+        fire_and_forget MoveTabToNewProcessAsync(std::shared_ptr<Document> doc, std::wstring file);
+        void OpenStartupTab(std::wstring const& file);
         void OnCurrentDocumentChanged();
         void FocusEditor(std::shared_ptr<Document> const& doc);
         void ScheduleRefresh(std::shared_ptr<Document> const& doc);
@@ -321,9 +333,12 @@ namespace winrt::RadPad::implementation
         int m_tabWidth{ 8 };               // width of a tab character, in spaces
         int m_zoom{ 100 };
         bool m_loaded{ false };
+        std::weak_ptr<Document> m_draggedDocument; // the tab being dragged from this window, if any
+        std::wstring m_draggedTabFile;             // and the file holding it for another window to read
         bool m_dialogOpen{ false };
         bool m_closePending{ false };
         bool m_forceClose{ false };
+        bool m_closed{ false };
     };
 }
 

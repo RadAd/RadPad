@@ -130,6 +130,17 @@ namespace instance
 
     bool ForwardCommandLineToExistingWindow()
     {
+        int argc = 0;
+        if (auto argv = CommandLineToArgvW(GetCommandLineW(), &argc))
+        {
+            bool tab = argc > 1 && _wcsicmp(argv[1], TabArgument) == 0;
+            LocalFree(argv);
+            if (tab)
+            {
+                return false; // a tab dragged out of another window gets a window of its own
+            }
+        }
+
         auto files = CommandLineFiles();
         if (files.empty())
         {

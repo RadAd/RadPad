@@ -55,7 +55,11 @@ namespace winrt::RadPad::implementation
         });
 
         appWindow.Closing([this](auto&&, AppWindowClosingEventArgs const& args) { OnAppWindowClosing(args); });
-        Closed([this](auto&&, auto&&) { SaveSettings(); });
+        Closed([this](auto&&, auto&&)
+        {
+            m_closed = true;
+            SaveSettings();
+        });
         // Pick up files removed from the taskbar jump list. Closing the jump list can reactivate the window
         // before Windows has saved the removal, so activation checks again a moment later, and the menu
         // also checks just before it opens.
@@ -148,13 +152,21 @@ namespace winrt::RadPad::implementation
         }
         m_loaded = true;
 
-        // Open any files passed on the command line, e.g. "RadPad.exe a.txt b.txt".
+        // Open any files passed on the command line, e.g. "RadPad.exe a.txt b.txt", or a tab dragged out of
+        // another RadPad window ("RadPad.exe /tab <file>").
         int argc = 0;
         if (auto argv = CommandLineToArgvW(GetCommandLineW(), &argc))
         {
-            for (int i = 1; i < argc; ++i)
+            if (argc == 3 && _wcsicmp(argv[1], instance::TabArgument) == 0)
             {
-                OpenFile(argv[i]);
+                OpenStartupTab(argv[2]);
+            }
+            else
+            {
+                for (int i = 1; i < argc; ++i)
+                {
+                    OpenFile(argv[i]);
+                }
             }
             LocalFree(argv);
         }

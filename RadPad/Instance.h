@@ -3,6 +3,10 @@
 // Opening files in a window that's already open, rather than starting another one.
 namespace instance
 {
+    // "RadPad.exe /tab <file>" starts a window with a tab dragged out of another RadPad window, from the
+    // file it wrote (see MainWindow::WriteTabFile). It always starts a new window.
+    constexpr wchar_t TabArgument[] = L"/tab";
+
     // If the command line names files and a RadPad window is open on the current virtual desktop,
     // sends the files to that window, brings it to the front and returns true. The caller should then exit.
     bool ForwardCommandLineToExistingWindow();
