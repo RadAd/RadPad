@@ -269,11 +269,19 @@
                         </MenuFlyoutItem>
                         <MenuFlyoutItem x:Name="ZoomResetItem" Text="Restore default zoom" Click="ZoomReset_Click" KeyboardAcceleratorTextOverride="Ctrl+0" />
                     </MenuFlyoutSubItem>
-                    <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True" />
-                    <ToggleMenuFlyoutItem x:Name="OutputPanelItem" Text="Output panel" Click="OutputPanel_Click" />
+                    <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE90E;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="OutputPanelItem" Text="Output panel" Click="OutputPanel_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE756;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->
-                    <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click" />
-                    <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click" />
+                    <ToggleMenuFlyoutItem x:Name="ShowWhitespaceItem" Text="Show whitespace" Click="ShowWhitespace_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE890;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
+                    <ToggleMenuFlyoutItem x:Name="TrailingWhitespaceItem" Text="Highlight trailing whitespace" Click="TrailingWhitespace_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE7E6;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
                     <ToggleMenuFlyoutItem x:Name="RainbowBracketsItem" Text="Rainbow brackets" Click="RainbowBrackets_Click">
                         <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE943;" /></ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
