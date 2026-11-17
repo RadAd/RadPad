@@ -1,5 +1,8 @@
 # RadPad
 
+[![Build](https://img.shields.io/github/actions/workflow/status/RadAd/RadPad/build.yml?branch=master&label=build)](https://github.com/RadAd/RadPad/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/RadAd/RadPad)](https://github.com/RadAd/RadPad/releases/latest)
+
 A tabbed Notepad clone built with WinUI 3 (Windows App SDK 1.7) and C++/WinRT.
 
 ## Requirements
