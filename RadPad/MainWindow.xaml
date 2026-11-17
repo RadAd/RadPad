@@ -272,7 +272,8 @@
                     <ToggleMenuFlyoutItem x:Name="StatusBarItem" Text="Status bar" Click="StatusBar_Click" IsChecked="True">
                         <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE90E;" /></ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
-                    <ToggleMenuFlyoutItem x:Name="OutputPanelItem" Text="Output panel" Click="OutputPanel_Click">
+                    <!-- F8 is handled in RootGrid_PreviewKeyDown, so only the shortcut text is shown. -->
+                    <ToggleMenuFlyoutItem x:Name="OutputPanelItem" Text="Output panel" Click="OutputPanel_Click" KeyboardAcceleratorTextOverride="F8">
                         <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE756;" /></ToggleMenuFlyoutItem.Icon>
                     </ToggleMenuFlyoutItem>
                     <!-- Only available with a monospaced font and word wrap off; see UpdateWhitespaceAvailability. -->

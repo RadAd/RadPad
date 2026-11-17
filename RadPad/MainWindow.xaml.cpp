@@ -191,6 +191,14 @@ namespace winrt::RadPad::implementation
             return;
         }
 
+        // F8 shows or hides the output panel (View > Output panel).
+        if (key == VirtualKey::F8 && !ctrl && !alt && !shift)
+        {
+            ShowOutputPanel(!m_outputPanelVisible);
+            e.Handled(true);
+            return;
+        }
+
         if (!ctrl || alt)
         {
             return;
