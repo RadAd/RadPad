@@ -29,8 +29,14 @@ jobs:
             choco install innosetup --no-progress -y
           }
 
+      # MSBuild's errors are repeated as annotations, so they show on the run's summary page.
       - name: Build
-        run: msbuild RadPad.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /m /v:minimal
+        run: |
+          msbuild RadPad.sln /p:Configuration=Release /p:Platform=${{ matrix.platform }} /m /v:minimal | Tee-Object -Variable log
+          if ($LASTEXITCODE) {
+            $log | Select-String -Pattern '\berror\b' | ForEach-Object { "::error::$($_.Line.Trim())" }
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
