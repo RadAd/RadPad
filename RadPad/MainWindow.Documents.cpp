@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "MainWindowHelpers.h"
+#include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Web.Http.h>
+#include <winrt/Windows.Web.Http.Headers.h>
 
 // Documents: creating, opening, saving, closing, and reloading files changed by other programs.
 namespace winrt::RadPad::implementation
@@ -8,7 +11,7 @@ namespace winrt::RadPad::implementation
     {
         if (Path.empty())
         {
-            return L"Untitled";
+            return Url.empty() ? L"Untitled" : UrlFileName(Url);
         }
         auto slash = Path.find_last_of(L"\\/");
         return slash == std::wstring::npos ? Path : Path.substr(slash + 1);
@@ -257,6 +260,13 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::OpenFile(std::wstring const& path)
     {
+        // Everything that opens files (the command line, Recent files, the jump list) can also open a URL.
+        if (instance::IsUrl(path))
+        {
+            OpenUrlAsync(path);
+            return;
+        }
+
         std::wstring fullPath = FullPath(path);
         if (auto existing = FindDocumentByPath(fullPath))
         {
@@ -275,20 +285,28 @@ namespace winrt::RadPad::implementation
             return;
         }
 
-        // Reuse the current tab if it's an untouched blank document, as Notepad does.
+        ShowLoadedText(loaded, fullPath, {});
+        SHAddToRecentDocs(SHARD_PATHW, fullPath.c_str());
+        AddRecentFile(fullPath);
+    }
+
+    void MainWindow::ShowLoadedText(textfile::LoadedText const& loaded, std::wstring const& path, std::wstring const& url)
+    {
+        // Into the current tab if it's an untouched blank document, as Notepad does, or a new one.
         auto doc = CurrentDocument();
-        if (!doc || !doc->Path.empty() || doc->IsDirty || !EditorText(doc->Editor).empty())
+        if (!doc || !doc->Path.empty() || !doc->Url.empty() || doc->IsDirty || !EditorText(doc->Editor).empty())
         {
             doc = CreateDocument();
         }
 
-        doc->Path = fullPath;
+        doc->Path = path;
+        doc->Url = url;
         doc->Encoding = doc->SavedEncoding = loaded.Encoding;
         doc->Eol = doc->SavedEol = loaded.Eol;
-        doc->Language = syntax::LanguageFromPath(fullPath);
+        doc->Language = syntax::LanguageFromPath(path.empty() ? doc->DisplayName() : path);
         doc->Editor.Document().SetText(TextSetOptions::None, loaded.Text);
         doc->SavedText = EditorText(doc->Editor);
-        doc->DiskStamp = FileStamp(fullPath);
+        doc->DiskStamp = path.empty() ? std::nullopt : FileStamp(path);
         doc->PendingDiskStamp.reset();
         doc->DeletedOnDisk = false;
         Select(doc->Editor, 0, 0);
@@ -300,8 +318,121 @@ namespace winrt::RadPad::implementation
         {
             UpdateStatusBar();
         }
-        SHAddToRecentDocs(SHARD_PATHW, fullPath.c_str());
-        AddRecentFile(fullPath);
+    }
+
+    fire_and_forget MainWindow::OpenUrlAsync(std::wstring url)
+    {
+        // Downloaded into a read-only tab, which isn't tied to a file: saving it asks where, as for a new
+        // document, and the saved copy can then be edited.
+        if (auto it = std::find_if(m_documents.begin(), m_documents.end(), [&](auto const& d) { return d->Url == url; }); it != m_documents.end())
+        {
+            Tabs().SelectedItem((*it)->Tab);
+            co_return;
+        }
+
+        auto strong = get_strong();
+        apartment_context ui;
+        StatusMessageText().Text(std::format(L"Downloading {}...", url));
+        textfile::LoadedText loaded;
+        std::wstring error;
+        try
+        {
+            Windows::Web::Http::HttpClient client;
+            auto response = co_await client.GetAsync(Uri{ url }, Windows::Web::Http::HttpCompletionOption::ResponseHeadersRead);
+            auto length = response.Content().Headers().ContentLength();
+            if (!response.IsSuccessStatusCode())
+            {
+                error = std::format(L"The server answered {} {}.", static_cast<int>(response.StatusCode()), std::wstring_view{ response.ReasonPhrase() });
+            }
+            else if (length && length.Value() > textfile::MaxFileSize)
+            {
+                error = L"The file is too large to open.";
+            }
+            else
+            {
+                auto buffer = co_await response.Content().ReadAsBufferAsync();
+                if (buffer.Length() > textfile::MaxFileSize)
+                {
+                    error = L"The file is too large to open.";
+                }
+                else
+                {
+                    loaded = textfile::FromBytes({ reinterpret_cast<char const*>(buffer.data()), buffer.Length() });
+                }
+            }
+        }
+        catch (hresult_error const& e)
+        {
+            error = e.message();
+        }
+        co_await ui;
+        StatusMessageText().Text(L"");
+        if (m_closed)
+        {
+            co_return;
+        }
+        if (!error.empty())
+        {
+            ShowMessageAsync(hstring{ AppName }, hstring{ std::format(L"Couldn't download \"{}\".\n\n{}", url, error) });
+            co_return;
+        }
+
+        ShowLoadedText(loaded, {}, url);
+        AddRecentFile(url);
+    }
+
+    fire_and_forget MainWindow::AskForUrlAsync()
+    {
+        auto strong = get_strong();
+        TextBox urlBox;
+        urlBox.Header(box_value(L"Address"));
+        urlBox.PlaceholderText(L"https://");
+        urlBox.MinWidth(400);
+        // Filled in from the clipboard when it holds an address.
+        try
+        {
+            auto content = Clipboard::GetContent();
+            if (content.Contains(StandardDataFormats::Text()))
+            {
+                std::wstring text{ co_await content.GetTextAsync() };
+                if (instance::IsUrl(text) && text.find_first_of(L" \t\r\n") == std::wstring::npos)
+                {
+                    urlBox.Text(text);
+                }
+            }
+        }
+        catch (hresult_error const&)
+        {
+        }
+        urlBox.Loaded([weakBox = make_weak(urlBox)](auto&&, auto&&)
+        {
+            if (auto box = weakBox.get())
+            {
+                box.Focus(FocusState::Programmatic);
+                box.SelectAll();
+            }
+        });
+
+        ContentDialog dialog;
+        dialog.Title(box_value(L"Open URL"));
+        dialog.Content(urlBox);
+        dialog.PrimaryButtonText(L"Open");
+        dialog.CloseButtonText(L"Cancel");
+        dialog.DefaultButton(ContentDialogButton::Primary);
+        if (co_await ShowDialogAsync(dialog) != ContentDialogResult::Primary)
+        {
+            co_return;
+        }
+
+        std::wstring url{ urlBox.Text() };
+        url.erase(0, url.find_first_not_of(L" \t"));
+        url.erase(url.find_last_not_of(L" \t") + 1);
+        if (!instance::IsUrl(url))
+        {
+            ShowMessageAsync(hstring{ AppName }, hstring{ std::format(L"\"{}\" isn't a web address. It should start with http:// or https://.", url) });
+            co_return;
+        }
+        OpenUrlAsync(url);
     }
 
     void MainWindow::OpenWithDialog()
@@ -328,9 +459,10 @@ namespace winrt::RadPad::implementation
         {
             try
             {
-                // A new document is suggested the first extension of its language, or .txt.
+                // A new document is suggested the first extension of its language, or .txt; a downloaded
+                // one, its name in the URL.
                 std::wstring suggested = doc->DisplayName();
-                if (doc->Path.empty())
+                if (doc->Path.empty() && doc->Url.empty())
                 {
                     auto patterns = syntax::LanguagePatterns(doc->Language);
                     bool hasExtension = !patterns.empty() && patterns.front().starts_with(L"*.");
@@ -364,6 +496,7 @@ namespace winrt::RadPad::implementation
 
         bool pathChanged = !PathsEqual(path, doc->Path);
         doc->Path = path;
+        doc->Url.clear(); // a downloaded document is now this file, and can be edited
         doc->Encoding = doc->SavedEncoding = encoding;
         doc->SavedEol = doc->Eol;
         doc->SavedText = std::move(text);
@@ -478,9 +611,10 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::UpdateReadOnly(std::shared_ptr<Document> const& doc)
     {
-        // Follows the file's read-only attribute and the user's permission to write it. A tab being moved to
-        // another window stays read-only until that's done (see MoveTabToNewProcessAsync).
-        doc->ReadOnly = !doc->Path.empty() && IsReadOnlyFile(doc->Path);
+        // Follows the file's read-only attribute and the user's permission to write it. A downloaded document
+        // is read-only until it's saved. A tab being moved to another window stays read-only until that's
+        // done (see MoveTabToNewProcessAsync).
+        doc->ReadOnly = !doc->Url.empty() || (!doc->Path.empty() && IsReadOnlyFile(doc->Path));
         doc->CanWrite = doc->Path.empty() || doc->DeletedOnDisk || CanWriteFile(doc->Path);
         if (!doc->IsClosing)
         {
@@ -498,7 +632,9 @@ namespace winrt::RadPad::implementation
         auto item = ReadOnlyItem();
         item.IsChecked(doc->ReadOnly || !doc->CanWrite);
         item.IsEnabled(!doc->Path.empty() && doc->CanWrite);
-        item.Text(doc->CanWrite ? L"Read-only" : L"Read-only (no permission to change the file)");
+        item.Text(!doc->Url.empty() ? L"Read-only (downloaded; save a copy to edit)"
+                  : doc->CanWrite   ? L"Read-only"
+                                    : L"Read-only (no permission to change the file)");
     }
 
     bool MainWindow::ReloadDocument(std::shared_ptr<Document> const& doc)

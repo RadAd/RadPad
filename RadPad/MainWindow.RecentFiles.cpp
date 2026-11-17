@@ -126,7 +126,7 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::OpenRecentFile(std::wstring path)
     {
-        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        if (!instance::IsUrl(path) && GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
         {
             std::erase_if(m_recentFiles, [&](auto const& existing) { return PathsEqual(existing, path); });
             OnRecentFilesChanged();

@@ -22,6 +22,7 @@ namespace textfile
     };
 
     constexpr int EncodingCount = 5;
+    constexpr uint64_t MaxFileSize = 256ull * 1024 * 1024; // larger files aren't opened
 
     struct LoadedText
     {
@@ -38,5 +39,7 @@ namespace textfile
 
     // Throws winrt::hresult_error on failure.
     LoadedText Load(std::wstring const& path);
+    // The text in a file's contents, as Load reads it, for contents from elsewhere (a download, say).
+    LoadedText FromBytes(std::string_view bytes);
     void Save(std::wstring const& path, std::wstring_view text, TextEncoding encoding, LineEnding eol);
 }

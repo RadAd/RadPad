@@ -50,6 +50,30 @@ namespace mainwindow
         return CompareStringOrdinal(a.c_str(), -1, b.c_str(), -1, TRUE) == CSTR_EQUAL;
     }
 
+    // The file name in a URL: its last path segment, unescaped and without any query or fragment, or the
+    // host when the path is empty ("https://example.com/a/b.py?x=1" gives "b.py").
+    inline std::wstring UrlFileName(std::wstring const& url)
+    {
+        std::wstring rest = url.substr(0, url.find_first_of(L"?#"));
+        if (auto scheme = rest.find(L"://"); scheme != std::wstring::npos)
+        {
+            rest.erase(0, scheme + 3);
+        }
+        while (!rest.empty() && rest.back() == L'/')
+        {
+            rest.pop_back();
+        }
+        auto slash = rest.find_last_of(L'/');
+        std::wstring name = slash == std::wstring::npos ? rest : rest.substr(slash + 1);
+        if (!name.empty())
+        {
+            DWORD size = static_cast<DWORD>(name.size() + 1);
+            UrlUnescapeW(name.data(), nullptr, &size, URL_UNESCAPE_INPLACE);
+            name.resize(wcslen(name.c_str()));
+        }
+        return name.empty() ? url : name;
+    }
+
     inline void CopyTextToClipboard(std::wstring const& text)
     {
         DataPackage package;

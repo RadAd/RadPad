@@ -7,6 +7,17 @@ namespace instance
     // file it wrote (see MainWindow::WriteTabFile). It always starts a new window.
     constexpr wchar_t TabArgument[] = L"/tab";
 
+    // Whether a command-line argument (or other file name) is an http or https address, which RadPad
+    // downloads rather than opening as a file.
+    inline bool IsUrl(std::wstring_view text)
+    {
+        auto startsWith = [&](std::wstring_view prefix)
+        {
+            return text.size() > prefix.size() && CompareStringOrdinal(text.data(), static_cast<int>(prefix.size()), prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
+        };
+        return startsWith(L"http://") || startsWith(L"https://");
+    }
+
     // If the command line names files and a RadPad window is open on the current virtual desktop,
     // sends the files to that window, brings it to the front and returns true. The caller should then exit.
     bool ForwardCommandLineToExistingWindow();
@@ -26,6 +37,6 @@ namespace instance
     void SetTaskbarRelaunch(HWND hwnd);
 
     // Marks hwnd as a RadPad window that accepts files from ForwardCommandLineToExistingWindow.
-    // openFiles is called on the window's thread with full paths.
+    // openFiles is called on the window's thread with full paths (or URLs).
     void AcceptForwardedFiles(HWND hwnd, std::function<void(std::vector<std::wstring>)> openFiles);
 }

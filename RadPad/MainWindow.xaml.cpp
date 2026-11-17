@@ -273,7 +273,7 @@ namespace winrt::RadPad::implementation
         {
             doc->Header = header;
             doc->Tab.Header(box_value(hstring{ header }));
-            ToolTipService::SetToolTip(doc->Tab, box_value(hstring{ doc->Path.empty() ? name : doc->Path }));
+            ToolTipService::SetToolTip(doc->Tab, box_value(hstring{ !doc->Path.empty() ? doc->Path : !doc->Url.empty() ? doc->Url : name }));
             if (doc == CurrentDocument())
             {
                 UpdateTitle();
@@ -420,7 +420,9 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::OnDragOver(IInspectable const&, DragEventArgs const& e)
     {
-        if (e.DataView().Contains(StandardDataFormats::StorageItems()))
+        // A link (from a browser, say) is opened unless the editor has taken it as text to insert.
+        bool link = e.DataView().Contains(StandardDataFormats::WebLink()) && !e.Handled();
+        if (e.DataView().Contains(StandardDataFormats::StorageItems()) || link)
         {
             e.AcceptedOperation(DataPackageOperation::Copy);
             e.DragUIOverride().Caption(L"Open");
@@ -429,12 +431,30 @@ namespace winrt::RadPad::implementation
 
     fire_and_forget MainWindow::OnDropAsync(DragEventArgs e)
     {
+        auto strong = get_strong();
+        if (e.DataView().Contains(StandardDataFormats::WebLink()) && !e.Handled())
+        {
+            auto deferral = e.GetDeferral();
+            Uri link{ nullptr };
+            try
+            {
+                link = co_await e.DataView().GetWebLinkAsync();
+            }
+            catch (hresult_error const&)
+            {
+            }
+            deferral.Complete();
+            if (link && instance::IsUrl(link.AbsoluteUri()))
+            {
+                OpenUrlAsync(std::wstring{ link.AbsoluteUri() });
+            }
+            co_return;
+        }
         if (!e.DataView().Contains(StandardDataFormats::StorageItems()))
         {
             co_return;
         }
 
-        auto strong = get_strong();
         auto deferral = e.GetDeferral();
         auto items = co_await e.DataView().GetStorageItemsAsync();
         deferral.Complete();

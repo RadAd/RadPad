@@ -6,6 +6,7 @@ namespace winrt::RadPad::implementation
 {
     void MainWindow::NewTab_Click(IInspectable const&, RoutedEventArgs const&) { CreateDocument(); }
     void MainWindow::Open_Click(IInspectable const&, RoutedEventArgs const&) { OpenWithDialog(); }
+    void MainWindow::OpenUrl_Click(IInspectable const&, RoutedEventArgs const&) { AskForUrlAsync(); }
     void MainWindow::SaveAll_Click(IInspectable const&, RoutedEventArgs const&) { SaveAll(); }
     void MainWindow::Exit_Click(IInspectable const&, RoutedEventArgs const&) { TryCloseWindowAsync(); }
     void MainWindow::Find_Click(IInspectable const&, RoutedEventArgs const&) { ShowFindPanel(false); }

@@ -16,10 +16,10 @@ namespace winrt::RadPad::implementation
             return;
         }
 
-        // An untitled document has no file name or folder yet.
+        // An untitled document has no file name or folder yet; a downloaded one has a name and URL but no folder.
         bool hasPath = !doc->Path.empty();
-        TabCopyNameItem().IsEnabled(hasPath);
-        TabCopyPathItem().IsEnabled(hasPath);
+        TabCopyNameItem().IsEnabled(hasPath || !doc->Url.empty());
+        TabCopyPathItem().IsEnabled(hasPath || !doc->Url.empty());
         TabOpenFolderItem().IsEnabled(hasPath);
 
         uint32_t index = 0;
@@ -40,7 +40,7 @@ namespace winrt::RadPad::implementation
     {
         if (auto doc = m_tabMenuDocument.lock())
         {
-            CopyTextToClipboard(doc->Path);
+            CopyTextToClipboard(doc->Path.empty() ? doc->Url : doc->Path);
         }
     }
 
@@ -212,7 +212,7 @@ namespace winrt::RadPad::implementation
     {
         // Drag data for a tab: the path of the file holding it.
         constexpr wchar_t TabFormat[] = L"RadPad.Tab";
-        constexpr int64_t TabFileVersion = 1;
+        constexpr int64_t TabFileVersion = 2;
 
         struct TabFileWriter
         {
@@ -282,6 +282,7 @@ namespace winrt::RadPad::implementation
             TabFileWriter writer{ out };
             writer.Number(TabFileVersion);
             writer.Text(doc->Path);
+            writer.Text(doc->Url);
             writer.Text(EditorText(doc->Editor));
             writer.Text(doc->SavedText);
             writer.Number(static_cast<int64_t>(doc->Encoding));
@@ -322,7 +323,7 @@ namespace winrt::RadPad::implementation
     std::shared_ptr<Document> MainWindow::ReadTabFile(std::wstring const& path, std::optional<uint32_t> index, RECT* window)
     {
         // Read in full first, so a bad file doesn't leave a half-made tab.
-        std::wstring filePath, text, savedText, language;
+        std::wstring filePath, url, text, savedText, language;
         int64_t encoding = 0, savedEncoding = 0, eol = 0, savedEol = 0, deleted = 0, hasStamp = 0, stamp1 = 0, stamp2 = 0, selectionStart = 0, selectionEnd = 0;
         std::vector<UndoRecord> stacks[2];
         RECT position{};
@@ -335,6 +336,7 @@ namespace winrt::RadPad::implementation
                 return nullptr;
             }
             filePath = reader.Text();
+            url = reader.Text();
             text = reader.Text();
             savedText = reader.Text();
             encoding = reader.Number();
@@ -372,6 +374,7 @@ namespace winrt::RadPad::implementation
 
         auto doc = CreateDocument();
         doc->Path = filePath;
+        doc->Url = url;
         doc->SavedText = savedText;
         doc->Encoding = static_cast<TextEncoding>(encoding);
         doc->SavedEncoding = static_cast<TextEncoding>(savedEncoding);

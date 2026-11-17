@@ -23,6 +23,7 @@ namespace winrt::RadPad::implementation
         Microsoft::UI::Xaml::Controls::TabViewItem Tab{ nullptr };
         Microsoft::UI::Xaml::Controls::RichEditBox Editor{ nullptr };
         std::wstring Path;      // empty for an untitled document
+        std::wstring Url;       // for a document downloaded from the web, its address (Path is then empty)
         std::wstring SavedText; // editor text as of the last load/save, used for dirty tracking
         textfile::TextEncoding Encoding{ textfile::TextEncoding::Utf8 };
         textfile::TextEncoding SavedEncoding{ textfile::TextEncoding::Utf8 };
@@ -86,6 +87,7 @@ namespace winrt::RadPad::implementation
         using ClickArgs = Microsoft::UI::Xaml::RoutedEventArgs;
         void NewTab_Click(Sender const&, ClickArgs const&);
         void Open_Click(Sender const&, ClickArgs const&);
+        void OpenUrl_Click(Sender const&, ClickArgs const&);
         void Save_Click(Sender const&, ClickArgs const&);
         void SaveAs_Click(Sender const&, ClickArgs const&);
         void SaveAll_Click(Sender const&, ClickArgs const&);
@@ -150,6 +152,9 @@ namespace winrt::RadPad::implementation
         std::shared_ptr<Document> FindDocumentByPath(std::wstring const& path);
         void OpenFile(std::wstring const& path);
         void OpenWithDialog();
+        fire_and_forget OpenUrlAsync(std::wstring url);
+        fire_and_forget AskForUrlAsync();
+        void ShowLoadedText(textfile::LoadedText const& loaded, std::wstring const& path, std::wstring const& url);
 
         // Recent files
         void AddRecentFile(std::wstring const& path);

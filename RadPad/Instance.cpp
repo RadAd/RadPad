@@ -22,6 +22,11 @@ namespace
         {
             for (int i = 1; i < argc; ++i)
             {
+                if (instance::IsUrl(argv[i]))
+                {
+                    files.emplace_back(argv[i]);
+                    continue;
+                }
                 std::wstring full(32768, L'\0');
                 DWORD length = GetFullPathNameW(argv[i], static_cast<DWORD>(full.size()), full.data(), nullptr);
                 if (length > 0 && length < full.size())

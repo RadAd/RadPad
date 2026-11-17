@@ -5,8 +5,6 @@ namespace textfile
 {
     namespace
     {
-        constexpr uint64_t MaxFileSize = 256ull * 1024 * 1024;
-
         std::optional<std::wstring> Decode(UINT codePage, std::string_view bytes, DWORD flags)
         {
             if (bytes.empty())
@@ -176,9 +174,12 @@ namespace textfile
             total += read;
         }
         bytes.resize(total);
+        return FromBytes(bytes);
+    }
 
+    LoadedText FromBytes(std::string_view view)
+    {
         LoadedText result;
-        std::string_view view = bytes;
         if (view.starts_with("\xEF\xBB\xBF"))
         {
             result.Encoding = TextEncoding::Utf8Bom;
