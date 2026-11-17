@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Format > Default settings: the settings new tabs start with. Each tab then has its own copy, so changing
+     them in a tab doesn't change these, and these don't change open tabs. -->
+<ContentDialog
+    x:Class="RadPad.DefaultSettingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Default settings"
+    PrimaryButtonText="OK"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary">
+
+    <StackPanel Spacing="16">
+        <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                   Text="Used for new tabs and files opened from now on; open tabs keep their own settings. A file that's opened keeps its own encoding and line ending." />
+
+        <Grid ColumnSpacing="16" RowSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition />
+                <RowDefinition />
+                <RowDefinition />
+                <RowDefinition />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+
+            <CheckBox x:Name="WordWrapBox" Grid.Row="0" Grid.Column="0" Content="Word wrap" />
+            <NumberBox x:Name="ZoomBox" Grid.Row="0" Grid.Column="1" Header="Zoom (%)" MinWidth="200"
+                       Minimum="10" Maximum="500" SmallChange="10" LargeChange="10" SpinButtonPlacementMode="Inline" />
+
+            <ComboBox x:Name="IndentKindBox" Grid.Row="1" Grid.Column="0" Header="Tab key inserts" MinWidth="200">
+                <x:String>A tab</x:String>
+                <x:String>Spaces</x:String>
+            </ComboBox>
+            <NumberBox x:Name="IndentSizeBox" Grid.Row="1" Grid.Column="1" Header="Indent size (spaces)" MinWidth="200"
+                       Minimum="1" Maximum="8" SmallChange="1" LargeChange="1" SpinButtonPlacementMode="Inline" />
+
+            <NumberBox x:Name="TabWidthBox" Grid.Row="2" Grid.Column="0" Header="Tab width" MinWidth="200"
+                       Minimum="1" Maximum="8" SmallChange="1" LargeChange="1" SpinButtonPlacementMode="Inline" />
+
+            <!-- Items are added in code, in the order of textfile::TextEncoding and LineEnding. -->
+            <ComboBox x:Name="EncodingBox" Grid.Row="3" Grid.Column="0" Header="Encoding" MinWidth="200" />
+            <ComboBox x:Name="LineEndingBox" Grid.Row="3" Grid.Column="1" Header="Line ending" MinWidth="200" />
+
+            <CheckBox x:Name="ShowWhitespaceBox" Grid.Row="4" Grid.Column="0" Content="Show whitespace" />
+            <CheckBox x:Name="TrailingWhitespaceBox" Grid.Row="4" Grid.Column="1" Content="Highlight trailing whitespace" />
+            <CheckBox x:Name="RainbowBracketsBox" Grid.Row="5" Grid.Column="0" Content="Rainbow brackets" />
+        </Grid>
+
+        <!-- Copies the current tab's settings, to make what's been set up there the default. -->
+        <Button x:Name="FromTabButton" Content="Use the current tab's settings" IsEnabled="False" Click="FromTab_Click" />
+    </StackPanel>
+</ContentDialog>

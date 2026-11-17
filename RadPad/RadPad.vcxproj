@@ -126,10 +126,19 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClInclude>
     <ClInclude Include="MainWindowHelpers.h" />
+    <ClInclude Include="DocumentSettings.h" />
+    <ClInclude Include="DefaultSettingsDialog.xaml.h">
+      <DependentUpon>DefaultSettingsDialog.xaml</DependentUpon>
+    </ClInclude>
+    <ClInclude Include="FontDialog.xaml.h">
+      <DependentUpon>FontDialog.xaml</DependentUpon>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+    <Page Include="DefaultSettingsDialog.xaml" />
+    <Page Include="FontDialog.xaml" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -161,12 +170,26 @@
     <ClCompile Include="MainWindow.RecentFiles.cpp" />
     <ClCompile Include="MainWindow.Tabs.cpp" />
     <ClCompile Include="MainWindow.Tools.cpp" />
+    <ClCompile Include="DefaultSettingsDialog.xaml.cpp">
+      <DependentUpon>DefaultSettingsDialog.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="FontDialog.xaml.cpp">
+      <DependentUpon>FontDialog.xaml</DependentUpon>
+    </ClCompile>
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="MainWindow.idl">
       <SubType>Code</SubType>
       <DependentUpon>MainWindow.xaml</DependentUpon>
+    </Midl>
+    <Midl Include="DefaultSettingsDialog.idl">
+      <SubType>Code</SubType>
+      <DependentUpon>DefaultSettingsDialog.xaml</DependentUpon>
+    </Midl>
+    <Midl Include="FontDialog.idl">
+      <SubType>Code</SubType>
+      <DependentUpon>FontDialog.xaml</DependentUpon>
     </Midl>
   </ItemGroup>
   <ItemGroup>

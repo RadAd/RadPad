@@ -1,0 +1,9 @@
+namespace RadPad
+{
+    // Format > Font: the editor font. See FontDialog.xaml.h.
+    [default_interface]
+    runtimeclass FontDialog : Microsoft.UI.Xaml.Controls.ContentDialog
+    {
+        FontDialog();
+    }
+}

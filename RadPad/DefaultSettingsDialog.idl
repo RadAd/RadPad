@@ -1,0 +1,9 @@
+namespace RadPad
+{
+    // Format > Default settings: the settings new tabs start with. See DefaultSettingsDialog.xaml.h.
+    [default_interface]
+    runtimeclass DefaultSettingsDialog : Microsoft.UI.Xaml.Controls.ContentDialog
+    {
+        DefaultSettingsDialog();
+    }
+}

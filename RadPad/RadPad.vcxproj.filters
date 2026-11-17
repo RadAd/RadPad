@@ -11,9 +11,13 @@
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
+    <Page Include="DefaultSettingsDialog.xaml" />
+    <Page Include="FontDialog.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="MainWindow.idl" />
+    <Midl Include="DefaultSettingsDialog.idl" />
+    <Midl Include="FontDialog.idl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -28,6 +32,8 @@
     <ClCompile Include="MainWindow.RecentFiles.cpp" />
     <ClCompile Include="MainWindow.Tabs.cpp" />
     <ClCompile Include="MainWindow.Tools.cpp" />
+    <ClCompile Include="DefaultSettingsDialog.xaml.cpp" />
+    <ClCompile Include="FontDialog.xaml.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Syntax.cpp" />
@@ -43,6 +49,9 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Instance.h" />
     <ClInclude Include="MainWindowHelpers.h" />
+    <ClInclude Include="DocumentSettings.h" />
+    <ClInclude Include="DefaultSettingsDialog.xaml.h" />
+    <ClInclude Include="FontDialog.xaml.h" />
     <ClInclude Include="Syntax.h" />
     <ClInclude Include="SyntaxInternal.h" />
     <ClInclude Include="Themes.h" />
