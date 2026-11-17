@@ -1,11 +1,15 @@
 # Builds Release x64 and ARM64 on every push and pull request, and keeps what the build puts in dist
-# (the zip, the installer and the MSIX for the Store) as artifacts of the run.
+# (the zip, the installer and the MSIX for the Store) as artifacts of the run. Pushing a version tag
+# (v1.2.3, matching RadPad/Version.h) also publishes a GitHub release with the zips and installers.
 name: Build
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -43,3 +47,30 @@ jobs:
           name: RadPad-${{ matrix.platform }}
           path: dist/*
           if-no-files-found: error
+
+  # The MSIX isn't attached: it's unsigned, so it's only for uploading to the Store.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches Version.h
+        run: |
+          version=$(sed -nE 's/^#define RADPAD_VERSION_(MAJOR|MINOR|PATCH) +([0-9]+).*/\2/p' RadPad/Version.h | paste -sd.)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match RadPad/Version.h ($version)."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "RadPad ${GITHUB_REF_NAME#v}" --generate-notes artifacts/*/*.zip artifacts/*/*-setup.exe
