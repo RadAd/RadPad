@@ -13,7 +13,8 @@
     "attribute": "#B58900",
     "variable": "#268BD2",
     "property": "#268BD2",
-    "macro": "#6C71C4"
+    "macro": "#6C71C4",
+    "escape": "#DC322F"
   },
   "dark": {
     "background": "#002B36",
@@ -28,6 +29,7 @@
     "attribute": "#B58900",
     "variable": "#268BD2",
     "property": "#268BD2",
-    "macro": "#6C71C4"
+    "macro": "#6C71C4",
+    "escape": "#DC322F"
   }
 }

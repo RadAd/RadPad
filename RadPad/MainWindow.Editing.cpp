@@ -14,7 +14,11 @@ namespace winrt::RadPad::implementation
         auto text = EditorText(editor);
         auto n = text.size();
         bool haveKinds = doc->HighlightedText == text && doc->DesiredKinds.size() == n;
-        auto isCode = [&](size_t i) { return !haveKinds || (doc->DesiredKinds[i] != TokenKind::Comment && doc->DesiredKinds[i] != TokenKind::String); };
+        auto isCode = [&](size_t i)
+        {
+            auto kind = haveKinds ? doc->DesiredKinds[i] : TokenKind::Plain;
+            return kind != TokenKind::Comment && kind != TokenKind::String && kind != TokenKind::Escape;
+        };
         auto opening = [](wchar_t c) { return c == L'(' || c == L'[' || c == L'{'; };
         auto closing = [](wchar_t c) { return c == L')' || c == L']' || c == L'}'; };
         auto partner = [](wchar_t c) { switch (c) { case L'(': return L')'; case L'[': return L']'; case L'{': return L'}'; case L')': return L'('; case L']': return L'['; default: return L'{'; } };

@@ -20,7 +20,7 @@ namespace themes
         };
 
         // JSON keys for the colours, in TokenKind order.
-        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property", L"macro", L"bracket1", L"bracket2", L"bracket3" };
+        constexpr std::wstring_view ColorKeys[] = { L"text", L"comment", L"keyword", L"type", L"string", L"number", L"preprocessor", L"tag", L"attribute", L"variable", L"property", L"macro", L"bracket1", L"bracket2", L"bracket3", L"escape" };
         static_assert(std::size(ColorKeys) == ColorCount);
 
         Color Rgb(uint32_t rgb)
@@ -44,8 +44,8 @@ namespace themes
         {
             return {
                 DefaultThemeName,
-                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5, 0x6F008A, 0x0431FA, 0x319331, 0x7B3814 }),
-                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE, 0xBEB7FF, 0xFFD700, 0xDA70D6, 0x179FFF }),
+                MakePalette(false, { 0x000000, 0x008000, 0x0000FF, 0x2B91AF, 0xA31515, 0x098658, 0x808080, 0x800000, 0xE50000, 0x001080, 0x0451A5, 0x6F008A, 0x0431FA, 0x319331, 0x7B3814, 0xEE0000 }),
+                MakePalette(true, { 0xFFFFFF, 0x6A9955, 0x569CD6, 0x4EC9B0, 0xCE9178, 0xB5CEA8, 0x9B9B9B, 0x569CD6, 0x9CDCFE, 0x9CDCFE, 0x9CDCFE, 0xBEB7FF, 0xFFD700, 0xDA70D6, 0x179FFF, 0xD7BA7D }),
             };
         }
 
@@ -82,7 +82,8 @@ namespace themes
         Palette ParsePalette(JsonObject const& json, bool dark)
         {
             // Colours that aren't given are the text colour, except macros, which fall back to the
-            // preprocessor colour (themes written before macros had a colour of their own).
+            // preprocessor colour, and escapes, the string colour (themes written before they had colours
+            // of their own).
             Palette palette;
             palette.Dark = dark;
             Color text = json.HasKey(L"text") ? ParseColor(json, L"text") : Rgb(dark ? 0xD4D4D4 : 0x000000);
@@ -94,6 +95,11 @@ namespace themes
             if (!json.HasKey(ColorKeys[macro]))
             {
                 palette.Colors[macro] = palette.Colors[static_cast<size_t>(syntax::TokenKind::Preprocessor)];
+            }
+            auto escape = static_cast<size_t>(syntax::TokenKind::Escape);
+            if (!json.HasKey(ColorKeys[escape]))
+            {
+                palette.Colors[escape] = palette.Colors[static_cast<size_t>(syntax::TokenKind::String)];
             }
             // Rainbow brackets default to VS Code's colours, rather than all being the text colour.
             uint32_t const darkBrackets[] = { 0xFFD700, 0xDA70D6, 0x179FFF };

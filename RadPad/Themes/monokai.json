@@ -13,6 +13,7 @@
     "attribute": "#A6E22E",
     "variable": "#FD971F",
     "property": "#A6E22E",
-    "macro": "#AE81FF"
+    "macro": "#AE81FF",
+    "escape": "#AE81FF"
   }
 }

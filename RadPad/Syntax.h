@@ -26,6 +26,7 @@ namespace syntax
         Bracket1, // rainbow brackets: the nesting depth, cycling through three colours
         Bracket2,
         Bracket3,
+        Escape,  // an escape sequence in a string, such as \n or \x41
         Unknown, // never produced by Classify; marks text whose colour hasn't been applied yet
     };
 

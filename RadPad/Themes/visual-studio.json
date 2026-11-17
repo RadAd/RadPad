@@ -15,7 +15,8 @@
     "macro": "#6F008A",
     "bracket1": "#0431FA",
     "bracket2": "#319331",
-    "bracket3": "#7B3814"
+    "bracket3": "#7B3814",
+    "escape": "#EE0000"
   },
   "dark": {
     "text": "#FFFFFF",
@@ -32,6 +33,7 @@
     "macro": "#BEB7FF",
     "bracket1": "#FFD700",
     "bracket2": "#DA70D6",
-    "bracket3": "#179FFF"
+    "bracket3": "#179FFF",
+    "escape": "#D7BA7D"
   }
 }

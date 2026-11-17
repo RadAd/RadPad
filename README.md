@@ -165,7 +165,7 @@ A theme has a `light` set of colours, a `dark` set, or both. With both, the edit
 }
 ```
 
-Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property`, `macro` and `bracket1` to `bracket3` (the rainbow bracket colours); any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour, and the bracket colours, which use VS Code's. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
+Colours are written `#RRGGBB`. The colour names are `text`, `comment`, `keyword`, `type`, `string`, `number`, `preprocessor`, `tag`, `attribute`, `variable`, `property`, `macro`, `bracket1` to `bracket3` (the rainbow bracket colours) and `escape` (escape sequences in strings, such as `\n`); any left out use the `text` colour, except `macro`, which uses the `preprocessor` colour, `escape`, which uses the `string` colour, and the bracket colours, which use VS Code's. `background` is optional: without it the editor keeps the app's background, unless the set is used in the other mode, when it's white for a light set and dark grey for a dark one.
 
 ## External tools
 The **Tools** menu runs other programs on the current file. They're listed in `%LOCALAPPDATA%\RadPad\tools.json`; **Tools > Edit tools** opens it in a tab, creating it with a few examples the first time (Show in Explorer, Command prompt here and Search Google). Saving it updates the menu straight away, and mistakes are reported in a message.

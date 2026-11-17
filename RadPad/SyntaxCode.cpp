@@ -150,6 +150,75 @@ namespace syntax::detail
             return npos;
         }
 
+        // Colours the escape sequences in the string from start to end: the escape character and what it
+        // escapes, with the digits of \xHH, \uHHHH, \u{H…}, \UHHHHHHHH and octal \ooo.
+        void MarkEscapes(Scanner const& s, size_t start, size_t end, wchar_t escape)
+        {
+            if (!escape)
+            {
+                return;
+            }
+            auto isOctal = [](wchar_t c) { return c >= L'0' && c <= L'7'; };
+            for (size_t i = start; i < end; ++i)
+            {
+                if (s.Text[i] != escape)
+                {
+                    continue;
+                }
+                wchar_t c = s.At(i + 1);
+                size_t j = i + 2;
+                auto digits = [&](size_t count, auto isDigit)
+                {
+                    for (size_t k = 0; k < count && j < end && isDigit(s.Text[j]); ++k)
+                    {
+                        ++j;
+                    }
+                };
+                if (c == L'x')
+                {
+                    digits(2, std::iswxdigit);
+                }
+                else if (c == L'u' && s.At(j) == L'{')
+                {
+                    size_t close = s.Text.find(L'}', j);
+                    j = close != npos && close < end ? close + 1 : j;
+                }
+                else if (c == L'u')
+                {
+                    digits(4, std::iswxdigit);
+                }
+                else if (c == L'U')
+                {
+                    digits(8, std::iswxdigit);
+                }
+                else if (isOctal(c))
+                {
+                    digits(2, isOctal);
+                }
+                else if (c == L'\r' || c == L'\0')
+                {
+                    j = i + 1; // a line continuation: just the escape character
+                }
+                j = std::min(j, end);
+                s.Fill(i, j, TokenKind::Escape);
+                i = j - 1;
+            }
+        }
+
+        // Whether the string whose quote is at i has a raw-string prefix, as in Python's r"\d" or
+        // rb'...': letters from rRbBuUfF just before the quote, including an r.
+        bool HasRawPrefix(Scanner const& s, size_t i)
+        {
+            size_t j = i;
+            bool raw = false;
+            while (j > 0 && std::wstring_view{ L"rRbBuUfF" }.find(s.Text[j - 1]) != npos)
+            {
+                raw = raw || s.Text[j - 1] == L'r' || s.Text[j - 1] == L'R';
+                --j;
+            }
+            return raw && i - j <= 2 && (j == 0 || !IsIdentChar(s.Text[j - 1]));
+        }
+
         bool StartsLineComment(LanguageDefinition const& lang, Scanner const& s, size_t i, bool atLineStart)
         {
             auto starts = [&](auto const& marker) { return s.StartsWith(i, marker); };
@@ -302,6 +371,10 @@ namespace syntax::detail
             {
                 size_t end = s.FindEnd(i + 3, text.substr(i, 3));
                 s.Fill(i, end, TokenKind::String);
+                if (!HasRawPrefix(s, i))
+                {
+                    MarkEscapes(s, i + 3, end, lang.Escape);
+                }
                 i = end;
                 continue;
             }
@@ -346,6 +419,11 @@ namespace syntax::detail
                     }
                 }
                 s.Fill(i, end, kind);
+                // Not in raw strings, or PowerShell's single-quoted strings, which have no escapes.
+                if (kind == TokenKind::String && !HasRawPrefix(s, i) && !(lang.PowerShellSyntax && c == L'\''))
+                {
+                    MarkEscapes(s, i + 1, end, lang.Escape);
+                }
                 i = end;
                 continue;
             }
@@ -355,6 +433,7 @@ namespace syntax::detail
                 if (end != npos)
                 {
                     s.Fill(i, end, TokenKind::String);
+                    MarkEscapes(s, i + 1, end, lang.Escape);
                     i = end;
                 }
                 else
