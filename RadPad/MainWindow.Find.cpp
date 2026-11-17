@@ -233,7 +233,7 @@ namespace winrt::RadPad::implementation
     {
         auto doc = CurrentDocument();
         std::wstring needle{ FindBox().Text() };
-        if (!doc || needle.empty())
+        if (!doc || needle.empty() || doc->Editor.IsReadOnly())
         {
             return;
         }

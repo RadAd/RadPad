@@ -244,11 +244,39 @@ namespace mainwindow
         }
     }
 
+    // Lets code change a read-only editor's text or formatting, which RichEditBox otherwise blocks.
+    class WritableScope
+    {
+    public:
+        explicit WritableScope(RichEditBox const& editor) : m_editor(editor), m_readOnly(editor.IsReadOnly())
+        {
+            if (m_readOnly)
+            {
+                m_editor.IsReadOnly(false);
+            }
+        }
+
+        ~WritableScope()
+        {
+            if (m_readOnly)
+            {
+                m_editor.IsReadOnly(true);
+            }
+        }
+
+        WritableScope(WritableScope const&) = delete;
+        WritableScope& operator=(WritableScope const&) = delete;
+
+    private:
+        RichEditBox m_editor;
+        bool m_readOnly;
+    };
+
     // Batches formatting changes so the editor redraws once at the end.
     class FormattingScope
     {
     public:
-        explicit FormattingScope(RichEditTextDocument const& document) : m_document(document)
+        explicit FormattingScope(RichEditBox const& editor) : m_writable(editor), m_document(editor.Document())
         {
             m_document.BatchDisplayUpdates();
         }
@@ -262,6 +290,7 @@ namespace mainwindow
         FormattingScope& operator=(FormattingScope const&) = delete;
 
     private:
+        WritableScope m_writable;
         RichEditTextDocument m_document;
     };
 
@@ -577,6 +606,13 @@ namespace mainwindow
         }
         return std::pair{ (static_cast<uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32) | data.ftLastWriteTime.dwLowDateTime,
                           (static_cast<uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow };
+    }
+
+    // Whether a file has the read-only attribute; false if it doesn't exist.
+    inline bool IsReadOnlyFile(std::wstring const& path)
+    {
+        DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0;
     }
 
     // %LOCALAPPDATA%\RadPad\Themes: colour themes added or customised by the user.

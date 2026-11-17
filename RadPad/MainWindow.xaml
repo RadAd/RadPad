@@ -144,6 +144,10 @@
                             <KeyboardAccelerator Modifiers="Control,Menu" Key="S" />
                         </MenuFlyoutItem.KeyboardAccelerators>
                     </MenuFlyoutItem>
+                    <!-- The file's read-only attribute; see UpdateReadOnly. -->
+                    <ToggleMenuFlyoutItem x:Name="ReadOnlyItem" Text="Read-only" Click="ReadOnly_Click">
+                        <ToggleMenuFlyoutItem.Icon><FontIcon Glyph="&#xE72E;" /></ToggleMenuFlyoutItem.Icon>
+                    </ToggleMenuFlyoutItem>
                     <MenuFlyoutSeparator />
                     <!-- Items are added in code from the saved list. -->
                     <MenuFlyoutSubItem x:Name="RecentFilesMenu" Text="Recent files">

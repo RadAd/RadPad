@@ -389,6 +389,7 @@ namespace winrt::RadPad::implementation
         doc->RedoStack = std::move(stacks[1]);
         doc->StartNewUndoRecord = true;
         Select(doc->Editor, static_cast<int>(selectionStart), static_cast<int>(selectionEnd - selectionStart));
+        UpdateReadOnly(doc);
         UpdateDocumentState(doc);
 
         // CreateDocument added the tab at the end; put it where it was dropped.
@@ -618,7 +619,7 @@ namespace winrt::RadPad::implementation
         co_await ui;
 
         doc->IsClosing = false;
-        doc->Editor.IsReadOnly(false);
+        UpdateReadOnly(doc);
         if (taken)
         {
             RemoveDocument(doc);

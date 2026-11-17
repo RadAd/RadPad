@@ -82,6 +82,31 @@ namespace winrt::RadPad::implementation
         }
     }
 
+    void MainWindow::ReadOnly_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        // Sets or clears the file's read-only attribute; UpdateReadOnly makes the editor and menu follow it.
+        auto doc = CurrentDocument();
+        if (!doc)
+        {
+            return;
+        }
+        if (!doc->Path.empty())
+        {
+            DWORD attributes = GetFileAttributesW(doc->Path.c_str());
+            if (attributes != INVALID_FILE_ATTRIBUTES)
+            {
+                attributes = ReadOnlyItem().IsChecked() ? attributes | FILE_ATTRIBUTE_READONLY : attributes & ~FILE_ATTRIBUTE_READONLY;
+            }
+            if (attributes == INVALID_FILE_ATTRIBUTES || !SetFileAttributesW(doc->Path.c_str(), attributes != 0 ? attributes : FILE_ATTRIBUTE_NORMAL))
+            {
+                hresult_error error{ HRESULT_FROM_WIN32(GetLastError()) };
+                ShowMessageAsync(hstring{ AppName }, hstring{ std::format(L"Couldn't change whether \"{}\" is read-only.\n\n{}", doc->Path, std::wstring_view{ error.message() }) });
+            }
+        }
+        UpdateReadOnly(doc);
+        FocusEditor(doc);
+    }
+
     void MainWindow::CloseTab_Click(IInspectable const&, RoutedEventArgs const&)
     {
         if (auto doc = CurrentDocument())

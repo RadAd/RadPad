@@ -102,7 +102,11 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::InsertText(RichEditBox const& editor, std::wstring_view text)
     {
-        // Replaces the selection and leaves the caret after the new text.
+        // Replaces the selection and leaves the caret after the new text. Nothing for a read-only file.
+        if (editor.IsReadOnly())
+        {
+            return;
+        }
         auto selection = editor.Document().Selection();
         if (selection.Length() != 0 || !text.empty())
         {
@@ -409,6 +413,11 @@ namespace winrt::RadPad::implementation
 
     void MainWindow::UndoOrRedo(std::shared_ptr<Document> const& doc, bool redo)
     {
+        if (doc->Editor.IsReadOnly())
+        {
+            return;
+        }
+
         // Record any edit that hasn't been processed yet, so it's the first thing undone.
         UpdateHighlighting(doc, false);
 

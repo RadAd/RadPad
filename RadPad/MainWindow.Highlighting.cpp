@@ -98,7 +98,7 @@ namespace winrt::RadPad::implementation
             }
             if (!scope)
             {
-                scope.emplace(document);
+                scope.emplace(doc->Editor);
             }
             auto format = document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat();
             ApplyFont(format);
@@ -170,7 +170,7 @@ namespace winrt::RadPad::implementation
             }
             if (!scope)
             {
-                scope.emplace(document);
+                scope.emplace(editor);
             }
             document.GetRange(static_cast<int>(i), static_cast<int>(j)).CharacterFormat().ForegroundColor(TokenColor(desired[i]));
             std::fill(applied.begin() + i, applied.begin() + j, desired[i]);

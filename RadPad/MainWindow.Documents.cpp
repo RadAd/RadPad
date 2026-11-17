@@ -294,6 +294,7 @@ namespace winrt::RadPad::implementation
         Select(doc->Editor, 0, 0);
         UpdateHighlighting(doc, true);
         ClearUndoHistory(doc);
+        UpdateReadOnly(doc);
         UpdateDocumentState(doc);
         if (doc == CurrentDocument())
         {
@@ -372,6 +373,7 @@ namespace winrt::RadPad::implementation
         {
             StatusMessageText().Text(L""); // no longer true that it was deleted
         }
+        UpdateReadOnly(doc); // saved under a new name, it's that file's attribute
         UpdateDocumentState(doc);
 
         // Saving under a new name switches to its extension's language, unless that would turn highlighting off.
@@ -408,6 +410,10 @@ namespace winrt::RadPad::implementation
         if (doc->Path.empty() || doc->AskingToReload || doc->IsClosing)
         {
             return;
+        }
+        if (IsReadOnlyFile(doc->Path) != doc->ReadOnly)
+        {
+            UpdateReadOnly(doc); // changed in Explorer, say; that doesn't change the stamp
         }
         auto stamp = FileStamp(doc->Path);
         if (stamp == doc->DiskStamp)
@@ -470,6 +476,22 @@ namespace winrt::RadPad::implementation
         }
     }
 
+    void MainWindow::UpdateReadOnly(std::shared_ptr<Document> const& doc)
+    {
+        // Follows the file's read-only attribute. A tab being moved to another window stays read-only until
+        // that's done (see MoveTabToNewProcessAsync).
+        doc->ReadOnly = !doc->Path.empty() && IsReadOnlyFile(doc->Path);
+        if (!doc->IsClosing)
+        {
+            doc->Editor.IsReadOnly(doc->ReadOnly);
+        }
+        if (doc == CurrentDocument())
+        {
+            ReadOnlyItem().IsChecked(doc->ReadOnly);
+            ReadOnlyItem().IsEnabled(!doc->Path.empty());
+        }
+    }
+
     bool MainWindow::ReloadDocument(std::shared_ptr<Document> const& doc)
     {
         // Replaces the text with the file's, as one undoable edit, keeping the caret and scroll position.
@@ -520,6 +542,7 @@ namespace winrt::RadPad::implementation
 
             double horizontal = doc->ScrollViewer ? doc->ScrollViewer.HorizontalOffset() : 0;
             double vertical = doc->ScrollViewer ? doc->ScrollViewer.VerticalOffset() : 0;
+            WritableScope writable{ editor }; // a read-only file is still kept up to date
             doc->StartNewUndoRecord = true;
             Select(editor, static_cast<int>(prefix), static_cast<int>(oldEnd - prefix));
             InsertText(editor, std::wstring_view{ newText }.substr(prefix, newText.size() - suffix - prefix));

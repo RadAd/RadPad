@@ -312,6 +312,8 @@ namespace winrt::RadPad::implementation
         Utf16LEItem().IsChecked(doc->Encoding == TextEncoding::Utf16LE);
         Utf16BEItem().IsChecked(doc->Encoding == TextEncoding::Utf16BE);
         AnsiItem().IsChecked(doc->Encoding == TextEncoding::Ansi);
+        ReadOnlyItem().IsChecked(doc->ReadOnly);
+        ReadOnlyItem().IsEnabled(!doc->Path.empty());
         for (auto const& [item, language] : m_languageItems)
         {
             item.IsChecked(language == doc->Language);
@@ -364,7 +366,7 @@ namespace winrt::RadPad::implementation
         // Set the font name and size on the existing text and on the default format for new text too,
         // since text that has been coloured carries its own character formatting.
         auto document = editor.Document();
-        FormattingScope scope{ document };
+        FormattingScope scope{ editor };
         auto defaultFormat = document.GetDefaultCharacterFormat();
         ApplyFont(defaultFormat);
         defaultFormat.ForegroundColor(TokenColor(TokenKind::Plain));
